@@ -1,14 +1,23 @@
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+	"log"
 
-func main() {
-	router := gin.Default()
-	router.GET("", func (c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "git server",
-		})
-	})
-	router.Run(":4000")
+	"gitark/config"
+	"gitark/router"
+)
+
+var _config config.Config
+
+func init() {
+	var err error
+	_config, err = config.LoadConfig(".")
+	if err != nil {
+		panic(err)
+	}
 }
 
+func main() {
+	router.InitRouter()
+	log.Fatal(router.Start("0.0.0.0:" + _config.PORT))
+}
