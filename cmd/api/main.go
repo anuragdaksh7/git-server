@@ -5,6 +5,7 @@ import (
 
 	"gitark/config"
 	"gitark/router"
+	_ "gitark/migrations"
 )
 
 var _config config.Config
