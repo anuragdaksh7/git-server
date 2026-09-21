@@ -1,14 +1,18 @@
 package router
 
 import (
+	"gitark/internal/user"
+	"net/http"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 var r *gin.Engine
 
-func InitRouter() {
+func InitRouter(
+	userHandler *user.Handler,
+) {
 	r = gin.Default()
 
 	r.Use(cors.New(cors.Config{
@@ -24,6 +28,13 @@ func InitRouter() {
 	r.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "git server")
 	})
+
+	userRouter := r.Group("/user")
+	{
+		userRouter.POST("/create", userHandler.SignUp)
+		userRouter.POST("/login", userHandler.LogIn)
+		userRouter.GET("/me", userHandler.Me)
+	}
 }
 
 func Start(addr string) error {
