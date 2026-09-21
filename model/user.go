@@ -6,5 +6,7 @@ type User struct {
 	Email string `gorm:"UniqueIndex"`
 	Password string
 	Username string `gorm:"UniqueIndex"`
+	
+	Repositories []Repository `gorm:"foreignKey:CreatedBy"`
 }
 

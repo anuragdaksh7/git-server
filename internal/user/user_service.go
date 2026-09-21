@@ -9,6 +9,8 @@ import (
 	"gitark/logger"
 	"gitark/model"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -61,6 +63,24 @@ func (s *service) SignUp(c context.Context, req *userDto.SignUpReq) (*userDto.Si
 		return nil, res.Error
 	}
 	logger.Logger.Info("User created: ", zap.String("email", user.Email))
+	
+	go func() {
+		dirpath := "/srv/git/users/"
+		repoPath := filepath.Join(dirpath, user.ID.String())
+		
+		if err := os.MkdirAll(repoPath, 0755); err != nil {
+			logger.Logger.Error(fmt.Sprintf("error creating repo directory: %s", err))
+		}
+		// cmd := exec.Command("git", "init", "--bare")
+
+		// cmd.Dir = repoPath
+
+		// err = cmd.Run()
+		// if err != nil {
+    		//	logger.Logger.Error(fmt.Sprintf("failed to initialize git repository: %s", err))
+		//	return
+		//}
+	}()
 
 	resp := &userDto.SignupRes{
 		ID: user.ID,
