@@ -16,6 +16,7 @@ func InitRouter(
 	jwtSecret string,
 	userHandler *user.Handler,
 	repoHandler *repository.Handler,
+	gitHandler http.Handler
 ) {
 	r = gin.Default()
 
@@ -34,6 +35,8 @@ func InitRouter(
 	})
 
 	auth := middleware.RequireAuth(jwtSecret)
+
+	r.Any("/git/*path", gin.WrapH(http.StripPrefix("/git", gitHandler)))
 
 	userRouter := r.Group("/user")
 	{

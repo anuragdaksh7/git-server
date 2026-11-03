@@ -7,6 +7,7 @@ type Config struct {
 	DbString string `mapstructure:"DB_STRING"`
 	Environment string `mapstructur:"ENVIRONMENT"`
 	JwtSecret               string `mapstructure:"JWT_SECRET"`
+	GitBinaryPath string `mapstructure:"GIT_BINARY_PATH"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

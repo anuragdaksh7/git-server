@@ -1,0 +1,363 @@
+{
+  "info": {
+    "_postman_id": "8f1c2b47-5d3e-4a91-9c6e-2b7a10d4f6c8",
+    "name": "gitark",
+    "description": "Collection for the gitark git server API (Gin).\n\nRoutes:\n- GET  /\n- POST /user/create\n- POST /user/login\n- GET  /user/me        (auth)\n- POST /repo/create    (auth)\n- GET  /repo/list      (auth)\n\nRun **User > Log In** first: its test script stores the JWT in the `token` collection variable, which every protected request sends as `Authorization: Bearer {{token}}`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "signupName",
+      "value": "anurag daksh",
+      "type": "string"
+    },
+    {
+      "key": "signupUsername",
+      "value": "anuragdaksh7",
+      "type": "string"
+    },
+    {
+      "key": "signupEmail",
+      "value": "anuragdaksh77777@gmail.com",
+      "type": "string"
+    },
+    {
+      "key": "signupPassword",
+      "value": "12345678",
+      "type": "string"
+    },
+    {
+      "key": "loginEmail",
+      "value": "anuragdaksh77777@gmail.com",
+      "type": "string"
+    },
+    {
+      "key": "loginPassword",
+      "value": "12345678",
+      "type": "string"
+    },
+    {
+      "key": "repoName",
+      "value": "hello",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "repoId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Service liveness check.",
+      "item": [
+        {
+          "name": "Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Returns the plain text `git server` with a 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('body is \"git server\"', () => pm.expect(pm.response.text()).to.eql('git server'));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "description": "Account creation, login and profile.",
+      "item": [
+        {
+          "name": "Sign Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{signupName}}\",\n  \"username\": \"{{signupUsername}}\",\n  \"email\": \"{{signupEmail}}\",\n  \"password\": \"{{signupPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "create"
+              ]
+            },
+            "description": "Creates a user. All four fields are required; email and username must be unique. Also kicks off creation of `/srv/git/users/<user-id>/`.\n\nReturns `{ \"data\": { \"id\": \"<uuid>\" } }`. 400 on invalid body, 500 if the user already exists."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "if (body && body.data && body.data.id) {",
+                  "  pm.collectionVariables.set('userId', body.data.id);",
+                  "  console.log('userId =', body.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Log In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/user/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "login"
+              ]
+            },
+            "description": "Authenticates with email + password. Responds with `{ \"data\": { \"user\": { token, id, name, email, username } } }` and also sets an `Authorization` cookie (HttpOnly, 30 days) that the middleware accepts as an alternative to the Bearer header.\n\nThe test script stores the JWT in the `token` collection variable for all protected requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('token returned', () => pm.expect(body.data.user.token).to.be.a('string').and.not.empty);",
+                  "",
+                  "pm.collectionVariables.set('token', body.data.user.token);",
+                  "pm.collectionVariables.set('userId', body.data.user.id);",
+                  "console.log('token acquired for user', body.data.user.email);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "me"
+              ]
+            },
+            "description": "Returns the authenticated user: `{ \"data\": { id, name, email, username, profilePicture, role } }`. Requires `Authorization: Bearer {{token}}` (or the Authorization cookie). 401 when the token is missing/invalid."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "pm.test('has user id', () => pm.expect(body.data.id).to.be.a('string'));",
+                  "pm.collectionVariables.set('userId', body.data.id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Repository",
+      "description": "Repository management. All routes require auth.",
+      "item": [
+        {
+          "name": "Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{repoName}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/repo/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repo",
+                "create"
+              ]
+            },
+            "description": "Creates a repo for the authenticated user. Name must match `^[A-Za-z0-9_.-]{1,100}$` (no `.` / `..`) and be unique per user. Rows go to `repositories`, and a bare repo is initialised at `/srv/git/users/<user-id>/<name>.git` via `git init --bare`.\n\nReturns `{ \"data\": { id, name, createdAt } }`. 400 on invalid/duplicate name."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "if (body && body.data && body.data.id) {",
+                  "  pm.collectionVariables.set('repoId', body.data.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repo/list",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repo",
+                "list"
+              ]
+            },
+            "description": "Lists the authenticated user's repos, newest first. Returns `{ \"data\": [ { id, name, createdAt } ] }`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data is an array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}
