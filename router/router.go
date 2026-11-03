@@ -36,7 +36,16 @@ func InitRouter(
 
 	auth := middleware.RequireAuth(jwtSecret)
 
-	r.Any("/git/*path", gin.WrapH(http.StripPrefix("/git", gitHandler)))
+	r.Any("/git/*path", gin.WrapH(middleware.GitAuth(jwtSecret, func(remoteUser string) http.Handler {
+		return http.StripPrefix("/git", &cgi.Handler{
+			Path: gitBinaryPath,
+			Env: []string{
+				"GIT_PROJECT_ROOT=" + config.GitRootDir,
+				"GIT_HTTP_EXPORT_ALL=1",
+				"REMOTE_USER=" + remoteUser,
+			},
+		})
+	})))
 
 	userRouter := r.Group("/user")
 	{
