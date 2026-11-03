@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http/cgi"
 
 	"gitark/config"
 	"gitark/internal/repository"
@@ -31,19 +30,11 @@ func main() {
 	userHandler := user.NewHandler(user.NewService())
 	repoHandler := repository.NewHandler(repository.NewService())
 
-	gitHandler := &cgi.Handler{
-		Path: _config.GitBinaryPath,
-		Env: []string{
-			"GIT_PROJECT_ROOT=" + config.GitRootDir,
-			"GIT_HTTP_EXPORT_ALL=1",
-		},
-	}
-
 	router.InitRouter(
 		_config.JwtSecret,
 		userHandler,
 		repoHandler,
-		gitHandler,
+		_config.GitBinaryPath,
 	)
 	log.Fatal(router.Start("0.0.0.0:" + _config.PORT))
 }

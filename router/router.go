@@ -1,10 +1,12 @@
 package router
 
 import (
+	"gitark/config"
 	"gitark/internal/repository"
 	"gitark/internal/user"
 	"gitark/middleware"
 	"net/http"
+	"net/http/cgi"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -16,7 +18,7 @@ func InitRouter(
 	jwtSecret string,
 	userHandler *user.Handler,
 	repoHandler *repository.Handler,
-	gitHandler http.Handler,
+	gitBinaryPath string,
 ) {
 	r = gin.Default()
 
