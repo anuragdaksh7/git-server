@@ -16,7 +16,7 @@ func InitRouter(
 	jwtSecret string,
 	userHandler *user.Handler,
 	repoHandler *repository.Handler,
-	gitHandler http.Handler
+	gitHandler http.Handler,
 ) {
 	r = gin.Default()
 
