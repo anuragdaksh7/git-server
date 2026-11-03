@@ -1,7 +1,9 @@
 package router
 
 import (
+	"gitark/internal/repository"
 	"gitark/internal/user"
+	"gitark/middleware"
 	"net/http"
 
 	"github.com/gin-contrib/cors"
@@ -11,7 +13,9 @@ import (
 var r *gin.Engine
 
 func InitRouter(
+	jwtSecret string,
 	userHandler *user.Handler,
+	repoHandler *repository.Handler,
 ) {
 	r = gin.Default()
 
@@ -29,11 +33,19 @@ func InitRouter(
 		c.String(http.StatusOK, "git server")
 	})
 
+	auth := middleware.RequireAuth(jwtSecret)
+
 	userRouter := r.Group("/user")
 	{
 		userRouter.POST("/create", userHandler.SignUp)
 		userRouter.POST("/login", userHandler.LogIn)
-		userRouter.GET("/me", userHandler.Me)
+		userRouter.GET("/me", auth, userHandler.Me)
+	}
+
+	repoRouter := r.Group("/repo", auth)
+	{
+		repoRouter.POST("/create", repoHandler.Create)
+		repoRouter.GET("/list", repoHandler.List)
 	}
 }
 

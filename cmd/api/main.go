@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"gitark/config"
+	"gitark/internal/repository"
 	"gitark/internal/user"
 	"gitark/logger"
 	_ "gitark/migrations"
@@ -26,13 +27,13 @@ func init() {
 }
 
 func main() {
-	
-	userSvc := user.NewService()
-
-	userHandler := user.NewHandler(userSvc)
+	userHandler := user.NewHandler(user.NewService())
+	repoHandler := repository.NewHandler(repository.NewService())
 
 	router.InitRouter(
+		_config.JwtSecret,
 		userHandler,
+		repoHandler,
 	)
 	log.Fatal(router.Start("0.0.0.0:" + _config.PORT))
 }

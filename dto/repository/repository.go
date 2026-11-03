@@ -1,6 +1,17 @@
 package repositoryDto
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 type CreateRepo struct {
 	Name string `json:"name"`
 }
 
+type RepoRes struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+}

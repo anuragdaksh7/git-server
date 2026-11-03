@@ -65,8 +65,7 @@ func (s *service) SignUp(c context.Context, req *userDto.SignUpReq) (*userDto.Si
 	logger.Logger.Info("User created: ", zap.String("email", user.Email))
 	
 	go func() {
-		dirpath := "/srv/git/users/"
-		repoPath := filepath.Join(dirpath, user.ID.String())
+		repoPath := filepath.Join(config.GitRootDir, user.ID.String())
 		
 		if err := os.MkdirAll(repoPath, 0755); err != nil {
 			logger.Logger.Error(fmt.Sprintf("error creating repo directory: %s", err))
