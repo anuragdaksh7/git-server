@@ -70,6 +70,32 @@ func (s *service) List(c context.Context, userId uuid.UUID) ([]repositoryDto.Rep
 	return res, nil
 }
 
+func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string) ([]repositoryDto.DirTreeRes, error) {
+	path := repoPath(userId, repoName)
+	cmd := exec.Command("git", "ls-tree", "-r", "HEAD")
+	cmd.Dir = path
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, errors.New("git ls-tree failed: " + err.Error())
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	res := make([]repositoryDto.DirTreeRes, 0, len(lines))
+	for _, line := range lines {
+		parts := strings.Fields(line)
+		if len(parts) < 4 {
+			continue
+		}
+		res = append(res, repositoryDto.DirTreeRes{
+			FileMode:   parts[0],
+			ObjectType: parts[1],
+			SHA1Hash:   parts[2],
+			FileName:   parts[3],
+		})
+	}
+	return res, nil
+}
+
 func repoPath(userId uuid.UUID, name string) string {
 	return filepath.Join(config.GitRootDir, userId.String(), name+".git")
 }

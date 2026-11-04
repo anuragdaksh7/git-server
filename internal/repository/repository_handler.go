@@ -47,3 +47,16 @@ func (h *Handler) List(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
+
+func (h *Handler) DirTree(c *gin.Context) {
+	currentUser := c.MustGet("user").(model.User)
+	repoName := c.Param("repoName")
+	res, err := h.Service.DirTree(c, currentUser.ID, repoName)
+	if err != nil {
+		logger.Logger.Error("Failed to get directory tree: ", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}

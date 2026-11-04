@@ -15,3 +15,10 @@ type RepoRes struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
 }
+
+type DirTreeRes struct {
+	FileMode string `json:"fileMode"`
+	ObjectType string `json:"objectType"`
+	SHA1Hash			string `json:"sha1Hash"`
+	FileName string `json:"fileName"`
+}
