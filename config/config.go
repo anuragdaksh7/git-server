@@ -5,7 +5,6 @@ import "github.com/spf13/viper"
 type Config struct {
 	PORT     string `mapstructure:"PORT"`
 	DbString string `mapstructure:"DB_STRING"`
-	Environment string `mapstructur:"ENVIRONMENT"`
 	JwtSecret               string `mapstructure:"JWT_SECRET"`
 	GitBinaryPath string `mapstructure:"GIT_BINARY_PATH"`
 }

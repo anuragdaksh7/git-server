@@ -25,7 +25,6 @@ createdb gitark
 cat > .env <<'EOF'
 PORT=4000
 DB_STRING=host=localhost user=postgres password=postgres dbname=gitark port=5432 sslmode=disable
-ENVIRONMENT=dev
 JWT_SECRET=change-me
 GIT_BINARY_PATH=/usr/lib/git-core/git-http-backend
 EOF
@@ -48,7 +47,6 @@ go run ./cmd/api
 |---|---|
 | `PORT` | Listen port (server binds `0.0.0.0:$PORT`) |
 | `DB_STRING` | PostgreSQL DSN |
-| `ENVIRONMENT` | `dev` uses a non-secure `SameSite=Lax` auth cookie; anything else uses `SameSite=None`, `Secure`, and a hardcoded domain |
 | `JWT_SECRET` | HMAC key for signing/verifying tokens |
 | `GIT_BINARY_PATH` | Absolute path to `git-http-backend` — find it with `git --exec-path` and append `/git-http-backend` (e.g. `/usr/lib/git-core`, `/usr/libexec/git-core`) |
 
@@ -58,12 +56,14 @@ The bare-repo root is **not** configurable yet; it is the constant
 ## API
 
 Base URL `http://localhost:4000`. Requests and responses are JSON.
+Authenticated routes take `Authorization: Bearer <jwt>` — there are no cookies;
+the token from `/user/login` is valid for 30 days.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/` | — | Liveness, returns `git server` |
 | `POST` | `/user/create` | — | Sign up → `{ data: { id } }` |
-| `POST` | `/user/login` | — | Log in → `{ data: { user: { token, id, name, email, username } } }` and sets an `Authorization` cookie |
+| `POST` | `/user/login` | — | Log in → `{ data: { user: { token, id, name, email, username } } }`; send the token as `Authorization: Bearer <token>` |
 | `GET` | `/user/me` | ✅ | Current user profile |
 | `POST` | `/repo/create` | ✅ | Create a repo → `{ data: { id, name, createdAt } }` |
 | `GET` | `/repo/list` | ✅ | List your repos, newest first |
@@ -181,6 +181,26 @@ nested below it costs the same as an empty one.
 | `path` is a file, or doesn't exist | `404 path not found` |
 | `path` contains `..`, `.`, `//`, or `\` | `400 invalid path` |
 
+## Frontend
+
+A Vite + React 19 SPA lives in `web/`. In dev it proxies `/api/*` to the Go
+server (`web/vite.config.ts`), which is why no CORS setup is needed locally.
+
+```bash
+cd web
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # type-check + production bundle into web/dist
+```
+
+| Route | Page |
+|---|---|
+| `/` | Dashboard: profile, create repo, repo list — each row links into the browser |
+| `/repo/:repoName` | Tree browser; `?path=<dir>` selects the node, breadcrumbs ascend |
+
+The browser requests exactly one level at a time and opens directories on click,
+so only the current node is ever fetched.
+
 ## Migrations
 
 Schemas are managed by goose; the API does not auto-migrate.
@@ -200,7 +220,7 @@ cmd/
   api/        HTTP server entrypoint
   migrate/    goose runner
 config/       viper .env loader, GORM connection, hardcoded git root
-middleware/   RequireAuth (API: cookie/Bearer), GitAuth (git: Basic + owner check)
+middleware/   RequireAuth (API: Bearer only), GitAuth (git: Basic + owner check)
 internal/
   user/       handler + service (signup, login, me)
   repository/ handler + service (create, list, one-level tree, bare repo init)
@@ -209,6 +229,7 @@ dto/          request/response payloads
 router/       route table and CORS
 migrations/   goose migrations
 rest/         .http scratch requests
+web/          Vite + React SPA (dashboard, repo tree browser)
 gitark.postman_collection.json
 ```
 
@@ -224,8 +245,5 @@ protected request inherits `Authorization: Bearer {{token}}`.
   visibility model yet, and no per-repo ACL beyond "owner".
 - `config.GitRootDir` is hardcoded, and repo paths are keyed by user UUID rather
   than username, so clone URLs are not human-friendly.
-- The `ENVIRONMENT` struct tag in `config/config.go` is misspelled
-  (`mapstructur`); it still decodes because mapstructure falls back to a
-  case-insensitive field-name match, but the tag is misleading.
 - `POST /user/create` returns `500` for a duplicate email/username rather than `409`.
 - `GetMeRes` exposes `profilePicture` and `role`, which the model does not have.

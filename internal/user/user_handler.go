@@ -1,11 +1,9 @@
 package user
 
 import (
-	"gitark/config"
 	userDto "gitark/dto/user"
 	"gitark/logger"
 	"gitark/model"
-	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -53,18 +51,7 @@ func (h *Handler) LogIn(c *gin.Context) {
 		return
 	}
 
-	_config, err := config.LoadConfig(".")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if _config.Environment != "dev" {
-		c.SetSameSite(http.SameSiteNoneMode)
-		c.SetCookie("Authorization", res.Token, 3600*24*30, "/", "backendservice.linksaver.in", true, true)
-	} else {
-		c.SetSameSite(http.SameSiteLaxMode)
-		c.SetCookie("Authorization", res.Token, 3600*24*30, "", "", false, true)
-	}
+	// Bearer only: the token goes in the response body, never a cookie.
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"user": res}})
 }
 

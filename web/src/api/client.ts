@@ -11,10 +11,16 @@ export class ApiError extends Error {
 
 const TOKEN_KEY = 'token'
 
+function readToken() {
+  const token = localStorage.getItem(TOKEN_KEY)
+  // guard against the literal strings a buggy caller can store
+  return token && token !== 'undefined' && token !== 'null' ? token : ''
+}
+
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token)
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = readToken()
   const res = await fetch(API_URL + path, {
     ...init,
     headers: {
@@ -25,6 +31,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
+    if (res.status === 401) {
+      // a rejected token is dead weight; drop it so the next login starts clean
+      localStorage.removeItem(TOKEN_KEY)
+      console.warn(`[api] 401 on ${path} — token ${token ? 'was sent' : 'was missing'}`)
+    }
     throw new ApiError(res.status, body.error ?? res.statusText)
   }
   return body.data as T

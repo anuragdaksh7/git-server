@@ -1,34 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { api, ApiError, type Me, type Repo } from '../api'
 import { MailIcon, PlusIcon, RepoIcon } from '../components/Icons'
-import { Alert, Brand, Button } from '../components/ui'
+import { TopBar } from '../components/TopBar'
+import { Alert, Button } from '../components/ui'
+import { initials, timeAgo } from '../lib/format'
 import { useForm } from './useForm'
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0].toUpperCase())
-    .join('')
-}
-
-const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
-function timeAgo(iso: string) {
-  const seconds = (new Date(iso).getTime() - Date.now()) / 1000
-  const units: [Intl.RelativeTimeFormatUnit, number][] = [
-    ['year', 31536000],
-    ['month', 2592000],
-    ['day', 86400],
-    ['hour', 3600],
-    ['minute', 60],
-  ]
-  for (const [unit, size] of units) {
-    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit)
-  }
-  return 'just now'
+function repoUrl(name: string) {
+  return `/repo/${encodeURIComponent(name)}`
 }
 
 export default function Dashboard() {
@@ -59,17 +39,7 @@ export default function Dashboard() {
 
   return (
     <div className="app">
-      <nav className="topbar">
-        <div className="container topbar-inner">
-          <Brand />
-          {me && (
-            <span className="topbar-user">
-              <span className="muted">@{me.username}</span>
-              <span className="avatar avatar-sm">{initials(me.name)}</span>
-            </span>
-          )}
-        </div>
-      </nav>
+      <TopBar user={me} />
 
       <main className="container">
         {error ? (
@@ -133,10 +103,12 @@ export default function Dashboard() {
                   <ul className="repo-list">
                     {repos.map((r) => (
                       <li key={r.id}>
-                        <span className="repo-icon">
-                          <RepoIcon />
-                        </span>
-                        <span className="repo-name">{r.name}</span>
+                        <Link className="repo-link" to={repoUrl(r.name)}>
+                          <span className="repo-icon">
+                            <RepoIcon />
+                          </span>
+                          <span className="repo-name">{r.name}</span>
+                        </Link>
                         <time className="muted small" dateTime={r.createdAt} title={new Date(r.createdAt).toLocaleString()}>
                           Created {timeAgo(r.createdAt)}
                         </time>

@@ -40,3 +40,13 @@ export interface Repo {
   name: string
   createdAt: string
 }
+
+/** One child of the requested directory — the API never returns grandchildren. */
+export interface TreeEntry {
+  fileMode: string
+  objectType: 'tree' | 'blob' | 'commit'
+  sha1Hash: string
+  fileName: string
+  /** Path relative to the repo root; pass back as ?path= to descend. */
+  path: string
+}
