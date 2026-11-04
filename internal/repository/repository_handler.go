@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+
 	repositoryDto "gitark/dto/repository"
 	"gitark/logger"
 	"gitark/model"
@@ -51,10 +53,20 @@ func (h *Handler) List(c *gin.Context) {
 func (h *Handler) DirTree(c *gin.Context) {
 	currentUser := c.MustGet("user").(model.User)
 	repoName := c.Param("repoName")
-	res, err := h.Service.DirTree(c, currentUser.ID, repoName)
+	// "" or "/" lists the repo root; anything else descends one level.
+	path := c.DefaultQuery("path", "")
+
+	res, err := h.Service.DirTree(c, currentUser.ID, repoName, path)
 	if err != nil {
-		logger.Logger.Error("Failed to get directory tree: ", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, ErrInvalidPath):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrRepoNotFound), errors.Is(err, ErrPathNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			logger.Logger.Error("Failed to get directory tree: ", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
 		return
 	}
 

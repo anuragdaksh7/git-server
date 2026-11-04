@@ -20,6 +20,12 @@ import (
 
 var validRepoName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
+var (
+	ErrRepoNotFound = errors.New("repository not found")
+	ErrPathNotFound = errors.New("path not found")
+	ErrInvalidPath  = errors.New("invalid path")
+)
+
 type service struct {
 	DB *gorm.DB
 }
@@ -71,30 +77,91 @@ func (s *service) List(c context.Context, userId uuid.UUID) ([]repositoryDto.Rep
 	return res, nil
 }
 
-func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string) ([]repositoryDto.DirTreeRes, error) {
-	path := repoPath(userId, repoName)
-	cmd := exec.Command("git", "ls-tree", "-r", "HEAD")
-	cmd.Dir = path
-	out, err := cmd.Output()
+func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string, path string) ([]repositoryDto.DirTreeRes, error) {
+	var repo model.Repository
+	if err := s.DB.Where("created_by = ? AND name = ?", userId, repoName).First(&repo).Error; err != nil {
+		return nil, ErrRepoNotFound
+	}
+
+	dir, err := cleanTreePath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	repoDir := repoPath(repo.CreatedBy, repo.Name)
+
+	// No commits yet: an empty repo has no HEAD, which is a valid empty listing.
+	if err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", "HEAD").Run(); err != nil {
+		return []repositoryDto.DirTreeRes{}, nil
+	}
+
+	ref := "HEAD"
+	if dir != "" {
+		ref = "HEAD:" + dir
+		out, err := exec.CommandContext(c, "git", "-C", repoDir, "cat-file", "-t", ref).Output()
+		if err != nil || strings.TrimSpace(string(out)) != "tree" {
+			return nil, ErrPathNotFound
+		}
+	}
+
+	// No -r: exactly one level below the requested node.
+	out, err := exec.CommandContext(c, "git", "-C", repoDir, "ls-tree", "-z", ref).Output()
 	if err != nil {
 		return nil, errors.New("git ls-tree failed: " + err.Error())
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	res := make([]repositoryDto.DirTreeRes, 0, len(lines))
-	for _, line := range lines {
-		parts := strings.Fields(line)
-		if len(parts) < 4 {
+	return parseTree(out, dir), nil
+}
+
+// cleanTreePath normalises a user supplied path. "" or "/" means the repo root.
+func cleanTreePath(p string) (string, error) {
+	p = strings.Trim(strings.TrimSpace(p), "/")
+	if p == "" {
+		return "", nil
+	}
+	if strings.ContainsAny(p, "\\\x00") {
+		return "", ErrInvalidPath
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return "", ErrInvalidPath
+		}
+	}
+	return p, nil
+}
+
+// parseTree decodes `git ls-tree -z` output: "<mode> <type> <sha>\t<name>\0".
+func parseTree(out []byte, base string) []repositoryDto.DirTreeRes {
+	res := make([]repositoryDto.DirTreeRes, 0)
+
+	for _, record := range strings.Split(string(out), "\x00") {
+		if record == "" {
 			continue
 		}
+		meta, name, ok := strings.Cut(record, "\t")
+		if !ok {
+			continue
+		}
+		fields := strings.Fields(meta)
+		if len(fields) < 3 {
+			continue
+		}
+
+		entryPath := name
+		if base != "" {
+			entryPath = base + "/" + name
+		}
+
 		res = append(res, repositoryDto.DirTreeRes{
-			FileMode:   parts[0],
-			ObjectType: parts[1],
-			SHA1Hash:   parts[2],
-			FileName:   parts[3],
+			FileMode:   fields[0],
+			ObjectType: fields[1],
+			SHA1Hash:   fields[2],
+			FileName:   name,
+			Path:       entryPath,
 		})
 	}
-	return res, nil
+
+	return res
 }
 
 func repoPath(userId uuid.UUID, name string) string {

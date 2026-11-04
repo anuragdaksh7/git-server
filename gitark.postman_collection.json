@@ -81,6 +81,11 @@
       "key": "repoId",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "treePath",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -351,6 +356,49 @@
                 "exec": [
                   "pm.test('status is 200', () => pm.response.to.have.status(200));",
                   "pm.test('data is an array', () => pm.expect(pm.response.json().data).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Tree",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repo/{{repoName}}/tree?path={{treePath}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repo",
+                "{{repoName}}",
+                "tree"
+              ],
+              "query": [
+                {
+                  "key": "path",
+                  "value": "{{treePath}}",
+                  "description": "Directory to list. Empty (or /) means the repository root."
+                }
+              ]
+            },
+            "description": "Lists exactly one level of the repo tree, never descendants. `path` picks the node; default root. Pass a returned entry's `path` back in to descend.\n\nReturns `{ \"data\": [ { fileMode, objectType, sha1Hash, fileName, path } ] }`.\n\n- empty repo -> `200` with `[]`\n- unknown repo / path is a file or missing -> `404`\n- `..`, `.`, `//` or `\\\\` in path -> `400`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data is an array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "",
+                  "const entries = pm.response.json().data;",
+                  "const firstDir = entries.find(e => e.objectType === 'tree');",
+                  "if (firstDir) { console.log('descend with treePath =', firstDir.path); }"
                 ]
               }
             }

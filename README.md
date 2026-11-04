@@ -67,6 +67,7 @@ Base URL `http://localhost:4000`. Requests and responses are JSON.
 | `GET` | `/user/me` | ✅ | Current user profile |
 | `POST` | `/repo/create` | ✅ | Create a repo → `{ data: { id, name, createdAt } }` |
 | `GET` | `/repo/list` | ✅ | List your repos, newest first |
+| `GET` | `/repo/:repoName/tree` | ✅ | One level of a repo's tree; `?path=<dir>` selects the directory, default root |
 | `ANY` | `/git/*` | Basic | Git Smart HTTP endpoints |
 
 Sign up / log in:
@@ -146,6 +147,40 @@ when they do.
 > publicly, and drop `GIT_HTTP_EXPORT_ALL` so only authenticated requests reach
 > the CGI handler.
 
+## Directory tree
+
+`GET /repo/:repoName/tree` returns **exactly one level** of a repository's tree —
+the direct children of the requested node, never grandchildren. The node is
+chosen with the `path` query parameter; omit it (or pass `/`) for the root.
+
+```bash
+# root of the repo
+curl -s 'http://localhost:4000/repo/firstrepo/tree' -H "Authorization: Bearer $TOKEN"
+
+# one level inside src/app
+curl -s 'http://localhost:4000/repo/firstrepo/tree?path=src/app' -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "data": [
+    { "fileMode": "040000", "objectType": "tree", "sha1Hash": "3284e1f…", "fileName": "src", "path": "src" },
+    { "fileMode": "100644", "objectType": "blob", "sha1Hash": "587be6b…", "fileName": "README.md", "path": "README.md" }
+  ]
+}
+```
+
+To descend, take a child's `path` and pass it back as `?path=`. Entries are
+sorted by git. Because the listing is non-recursive, a directory with 500 files
+nested below it costs the same as an empty one.
+
+| Case | Response |
+|---|---|
+| Empty repository (no commits) | `200` with `data: []` |
+| Unknown repo name, or one you don't own | `404 repository not found` |
+| `path` is a file, or doesn't exist | `404 path not found` |
+| `path` contains `..`, `.`, `//`, or `\` | `400 invalid path` |
+
 ## Migrations
 
 Schemas are managed by goose; the API does not auto-migrate.
@@ -168,7 +203,7 @@ config/       viper .env loader, GORM connection, hardcoded git root
 middleware/   RequireAuth (API: cookie/Bearer), GitAuth (git: Basic + owner check)
 internal/
   user/       handler + service (signup, login, me)
-  repository/ handler + service (create, list, bare repo init)
+  repository/ handler + service (create, list, one-level tree, bare repo init)
 model/        GORM models (User, Repository, BaseModel)
 dto/          request/response payloads
 router/       route table and CORS
