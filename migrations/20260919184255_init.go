@@ -1,9 +1,9 @@
 package migrations
 
 import (
-	"gitark/config"
 	"context"
 	"database/sql"
+	"gitark/config"
 	"gitark/model"
 	"github.com/pressly/goose/v3"
 )

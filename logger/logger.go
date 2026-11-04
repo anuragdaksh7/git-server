@@ -9,6 +9,6 @@ import (
 var Logger *zap.Logger
 
 func InitLogger(config config.Config) {
-devLogger, _ := zap.NewDevelopment()
+	devLogger, _ := zap.NewDevelopment()
 	Logger = devLogger
 }

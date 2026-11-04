@@ -11,4 +11,3 @@ type Service interface {
 	Login(c context.Context, req *userDto.LoginReq) (*userDto.LoginRes, error)
 	Me(c context.Context, userId uuid.UUID) (*userDto.GetMeRes, error)
 }
-

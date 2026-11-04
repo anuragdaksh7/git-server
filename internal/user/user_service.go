@@ -22,11 +22,11 @@ import (
 
 type service struct {
 	timeout time.Duration
-	DB *gorm.DB
+	DB      *gorm.DB
 }
 
 func NewService() Service {
-	return  &service{
+	return &service{
 		time.Duration(20) * time.Second,
 		config.DB,
 	}
@@ -36,14 +36,13 @@ func (s *service) SignUp(c context.Context, req *userDto.SignUpReq) (*userDto.Si
 	if req.Name == "" || req.Email == "" || req.Password == "" || req.Username == "" {
 		return nil, errors.New("invalid fields")
 	}
-	
+
 	var user model.User
 	s.DB.Where("email = ? OR username = ?", req.Email, req.Username).First(&user)
 	if user.ID != uuid.Nil {
 		logger.Logger.Error("user already exists with same email or username")
 		return nil, errors.New("user already exists")
 	}
-	
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -52,8 +51,8 @@ func (s *service) SignUp(c context.Context, req *userDto.SignUpReq) (*userDto.Si
 	}
 
 	user = model.User{
-		Email: req.Email,
-		Name: req.Name,
+		Email:    req.Email,
+		Name:     req.Name,
 		Password: string(hash),
 		Username: req.Username,
 	}
@@ -63,10 +62,10 @@ func (s *service) SignUp(c context.Context, req *userDto.SignUpReq) (*userDto.Si
 		return nil, res.Error
 	}
 	logger.Logger.Info("User created: ", zap.String("email", user.Email))
-	
+
 	go func() {
 		repoPath := filepath.Join(config.GitRootDir, user.ID.String())
-		
+
 		if err := os.MkdirAll(repoPath, 0755); err != nil {
 			logger.Logger.Error(fmt.Sprintf("error creating repo directory: %s", err))
 		}
@@ -76,7 +75,7 @@ func (s *service) SignUp(c context.Context, req *userDto.SignUpReq) (*userDto.Si
 
 		// err = cmd.Run()
 		// if err != nil {
-    		//	logger.Logger.Error(fmt.Sprintf("failed to initialize git repository: %s", err))
+		//	logger.Logger.Error(fmt.Sprintf("failed to initialize git repository: %s", err))
 		//	return
 		//}
 	}()
@@ -88,7 +87,7 @@ func (s *service) SignUp(c context.Context, req *userDto.SignUpReq) (*userDto.Si
 	return resp, nil
 }
 
-func  (s *service) Login(c context.Context, req *userDto.LoginReq) (*userDto.LoginRes, error) {
+func (s *service) Login(c context.Context, req *userDto.LoginReq) (*userDto.LoginRes, error) {
 	if req.Email == "" || req.Password == "" {
 		logger.Logger.Error("SignUpReq fields: ", zap.Any("req", req))
 		return nil, errors.New("invalid fields")
@@ -126,8 +125,8 @@ func  (s *service) Login(c context.Context, req *userDto.LoginReq) (*userDto.Log
 
 	return &userDto.LoginRes{
 		Token: tokenString,
-		ID: user.ID,
-		Name: user.Name,
+		ID:    user.ID,
+		Name:  user.Name,
 		Email: user.Email,
 	}, nil
 }
@@ -142,12 +141,11 @@ func (s *service) Me(c context.Context, userId uuid.UUID) (*userDto.GetMeRes, er
 	}
 
 	res := &userDto.GetMeRes{
-		ID:             user.ID,
-		Name:           user.Name,
-		Email:          user.Email,
-		Username: 	user.Username,
+		ID:       user.ID,
+		Name:     user.Name,
+		Email:    user.Email,
+		Username: user.Username,
 	}
 
 	return res, nil
 }
-

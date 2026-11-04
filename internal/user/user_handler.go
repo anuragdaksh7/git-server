@@ -73,4 +73,3 @@ func (h *Handler) Me(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
-
