@@ -121,3 +121,23 @@ func (h *Handler) CommitHistory(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
+
+func (h *Handler) BlobData(c *gin.Context) {
+	currentUser := c.MustGet("user").(model.User)
+	repoName := c.Param("repoName")
+	blobHash := c.Param("blobHash")
+
+	data, err := h.Service.BlobData(c, currentUser.ID, repoName, blobHash)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrRepoNotFound), errors.Is(err, ErrBlobNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			logger.Logger.Error("Failed to get blob data: ", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.Data(http.StatusOK, "application/octet-stream", data)
+}

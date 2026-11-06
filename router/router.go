@@ -63,6 +63,7 @@ func InitRouter(
 		repoRouter.GET("/:repoName/refs", repoHandler.Refs)
 		repoRouter.GET("/:repoName/tree", repoHandler.DirTree)
 		repoRouter.GET("/:repoName/commits/*branch", repoHandler.CommitHistory)
+		repoRouter.GET("/:repoName/blob/:blobHash", repoHandler.BlobData)
 	}
 }
 

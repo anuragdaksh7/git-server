@@ -172,6 +172,22 @@ func (s *service) Refs(c context.Context, userId uuid.UUID, repoName string) (*r
 	return res, nil
 }
 
+func (s *service)	BlobData(c context.Context, userId uuid.UUID, repoName string, blobHash string) ([]byte, error) {
+	var repo model.Repository
+	if err := s.DB.Where("created_by = ? AND name = ?", userId, repoName).First(&repo).Error; err != nil {
+		return nil, ErrRepoNotFound
+	}
+
+	repoDir := repoPath(repo.CreatedBy, repo.Name)
+
+	out, err := exec.CommandContext(c, "git", "-C", repoDir, "cat-file", "-p", blobHash).Output()
+	if err != nil {
+		return nil, errors.New("git cat-file failed: " + err.Error())
+	}
+
+	return out, nil
+}
+
 // resolveCommit turns any commit-ish (branch, tag, SHA, HEAD) into a full SHA.
 func resolveCommit(c context.Context, repoDir string, ref string) (string, error) {
 	out, err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", ref+"^{commit}").Output()

@@ -13,4 +13,5 @@ type Service interface {
 	DirTree(c context.Context, userId uuid.UUID, repoName string, ref string, path string) ([]repositoryDto.DirTreeRes, error)
 	CommitHistory(c context.Context, userId uuid.UUID, repoName string, branch string, path string, limit int) ([]repositoryDto.CommitRes, error)
 	Refs(c context.Context, userId uuid.UUID, repoName string) (*repositoryDto.RefsRes, error)
+	BlobData(c context.Context, userId uuid.UUID, repoName string, blobHash string) ([]byte, error)
 }
