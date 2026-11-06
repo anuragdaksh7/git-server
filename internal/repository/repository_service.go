@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"gitark/config"
 	repositoryDto "gitark/dto/repository"
 	"gitark/logger"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -21,9 +23,11 @@ import (
 var validRepoName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
 var (
-	ErrRepoNotFound = errors.New("repository not found")
-	ErrPathNotFound = errors.New("path not found")
-	ErrInvalidPath  = errors.New("invalid path")
+	ErrRepoNotFound   = errors.New("repository not found")
+	ErrPathNotFound   = errors.New("path not found")
+	ErrInvalidPath    = errors.New("invalid path")
+	ErrBranchNotFound = errors.New("branch not found")
+	ErrInvalidBranch  = errors.New("invalid branch name")
 )
 
 type service struct {
@@ -113,7 +117,9 @@ func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string, 
 	return parseTree(out, dir), nil
 }
 
-func (s *service) CommitHistory(c context.Context, userId uuid.UUID, repoName string, branch string) ([]repositoryDto.CommitRes, error) {
+// CommitHistory lists commits reachable from branch, optionally restricted to
+// those touching path. An empty repository yields an empty list, not an error.
+func (s *service) CommitHistory(c context.Context, userId uuid.UUID, repoName string, branch string, path string, limit int) ([]repositoryDto.CommitRes, error) {
 	var repo model.Repository
 	if err := s.DB.Where("created_by = ? AND name = ?", userId, repoName).First(&repo).Error; err != nil {
 		return nil, ErrRepoNotFound
@@ -130,7 +136,27 @@ func (s *service) CommitHistory(c context.Context, userId uuid.UUID, repoName st
 		return []repositoryDto.CommitRes{}, nil
 	}
 
-	args := []string{"-C", repoDir, "log", "--pretty=format:%H%x09%an%x09%ad%x09%s", "--date=iso"}
+	ref := strings.TrimSpace(branch)
+	if ref == "" {
+		ref = "HEAD"
+	}
+	if !safeRef(ref) {
+		return nil, ErrInvalidBranch
+	}
+	if err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", ref+"^{commit}").Run(); err != nil {
+		return nil, ErrBranchNotFound
+	}
+
+	if limit <= 0 || limit > maxCommitLimit {
+		limit = defaultCommitLimit
+	}
+
+	// -z keeps records NUL separated so messages containing tabs/newlines are safe
+	args := []string{
+		"-C", repoDir, "log", ref, "-z",
+		fmt.Sprintf("--max-count=%d", limit),
+		"--pretty=format:%H%x09%an%x09%aI%x09%s",
+	}
 	if dir != "" {
 		args = append(args, "--", dir)
 	}
@@ -140,25 +166,50 @@ func (s *service) CommitHistory(c context.Context, userId uuid.UUID, repoName st
 		return nil, errors.New("git log failed: " + err.Error())
 	}
 
-	lines := strings.Split(string(out), "\n")
-	res := make([]repositoryDto.CommitRes, 0, len(lines))
-	for _, line := range lines {
-		if line == "" {
+	return parseCommits(out), nil
+}
+
+const (
+	defaultCommitLimit = 50
+	maxCommitLimit     = 200
+)
+
+// safeRef rejects input git would read as an option, plus whitespace/controls.
+// Existence is confirmed separately with rev-parse.
+func safeRef(ref string) bool {
+	if ref == "" || len(ref) > 255 || strings.HasPrefix(ref, "-") {
+		return false
+	}
+	return !strings.ContainsAny(ref, " \t\n\r\x00")
+}
+
+// parseCommits decodes `git log -z --pretty=format:%H%x09%an%x09%aI%x09%s`.
+func parseCommits(out []byte) []repositoryDto.CommitRes {
+	records := strings.Split(string(out), "\x00")
+	res := make([]repositoryDto.CommitRes, 0, len(records))
+
+	for _, record := range records {
+		record = strings.TrimLeft(record, "\n")
+		if record == "" {
 			continue
 		}
-		fields := strings.SplitN(line, "\t", 4)
+		fields := strings.SplitN(record, "\t", 4)
 		if len(fields) < 4 {
 			continue
 		}
+		date, err := time.Parse(time.RFC3339, fields[2])
+		if err != nil {
+			continue
+		}
 		res = append(res, repositoryDto.CommitRes{
-			SHA1Hash: fields[0],
-			Author:   fields[1],
-			Date:     fields[2],
-			Message:  fields[3],
+			SHA:     fields[0],
+			Author:  fields[1],
+			Date:    date,
+			Message: fields[3],
 		})
 	}
 
-	return res, nil
+	return res
 }
 
 // cleanTreePath normalises a user supplied path. "" or "/" means the repo root.

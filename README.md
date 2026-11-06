@@ -68,6 +68,7 @@ the token from `/user/login` is valid for 30 days.
 | `POST` | `/repo/create` | ✅ | Create a repo → `{ data: { id, name, createdAt } }` |
 | `GET` | `/repo/list` | ✅ | List your repos, newest first |
 | `GET` | `/repo/:repoName/tree` | ✅ | One level of a repo's tree; `?path=<dir>` selects the directory, default root |
+| `GET` | `/repo/:repoName/commits/:branch` | ✅ | Commit history for a branch; `?path=<dir>` and `?limit=` optional |
 | `ANY` | `/git/*` | Basic | Git Smart HTTP endpoints |
 
 Sign up / log in:
@@ -201,6 +202,47 @@ npm run build    # type-check + production bundle into web/dist
 The browser requests exactly one level at a time and opens directories on click,
 so only the current node is ever fetched.
 
+## Commit history
+
+`GET /repo/:repoName/commits/:branch` lists commits reachable from `:branch`,
+newest first, capped at 50 by default (`?limit=` raises it to a maximum of 200).
+
+```bash
+curl -s 'http://localhost:4000/repo/firstrepo/commits/main' -H "Authorization: Bearer $TOKEN"
+
+# history for one directory only
+curl -s 'http://localhost:4000/repo/firstrepo/commits/main?path=src/app' -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "data": [
+    {
+      "sha": "3f21dc49c7120b899baf2a0b62dcff1f5c978ca9",
+      "author": "Anurag Daksh",
+      "date": "2026-11-06T23:27:55+05:30",
+      "message": "add tree browser"
+    }
+  ]
+}
+```
+
+`:branch` accepts any commit-ish that resolves inside the repo — branch, tag or
+full SHA. `?path=` is an optional filter (omit it for the whole repo); it maps to
+`git log <branch> -- <path>`, so it also works for directories that no longer
+exist on the branch.
+
+| Case | Response |
+|---|---|
+| Empty repository (no commits) | `200` with `data: []`, whatever branch was asked for |
+| Unknown repo | `404 repository not found` |
+| Branch/tag/SHA not in the repo | `404 branch not found` |
+| Branch starting with `-`, or containing whitespace | `400 invalid branch name` |
+| `path` contains `..`, `.`, `//`, or `\` | `400 invalid path` |
+
+Nothing from the request is passed through a shell, and a leading `-` is rejected
+so a branch name can never be read as a git option.
+
 ## Migrations
 
 Schemas are managed by goose; the API does not auto-migrate.
@@ -223,7 +265,7 @@ config/       viper .env loader, GORM connection, hardcoded git root
 middleware/   RequireAuth (API: Bearer only), GitAuth (git: Basic + owner check)
 internal/
   user/       handler + service (signup, login, me)
-  repository/ handler + service (create, list, one-level tree, bare repo init)
+  repository/ handler + service (create, list, one-level tree, commit history, bare repo init)
 model/        GORM models (User, Repository, BaseModel)
 dto/          request/response payloads
 router/       route table and CORS

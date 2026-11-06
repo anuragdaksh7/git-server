@@ -64,7 +64,10 @@ export const api = {
   fork: (repoName: string) => plannedWrite(`POST ${repoPath(repoName)}/fork`),
 
   commits: (repoName: string, owner: string, ref: string, path = '') =>
-    planned<Commit[]>(withQuery(`GET ${repoPath(repoName)}/commits`, { ref, path }), placeholder.commits(owner)),
+    planned<Commit[]>(
+      withQuery(`GET ${repoPath(repoName)}/commits/${encodeURIComponent(ref)}`, { path }),
+      placeholder.commits(owner),
+    ),
   readme: (repoName: string, ref: string, cloneUrl: string) =>
     planned<Blob | null>(withQuery(`GET ${repoPath(repoName)}/readme`, { ref }), placeholder.readme(repoName, cloneUrl)),
   blob: (repoName: string, ref: string, path: string) =>

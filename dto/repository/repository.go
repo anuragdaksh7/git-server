@@ -25,8 +25,8 @@ type DirTreeRes struct {
 }
 
 type CommitRes struct {
-	Hash      string    `json:"hash"`
-	Author    string    `json:"author"`
-	Date      time.Time `json:"date"`
-	Message   string    `json:"message"`
+	SHA     string    `json:"sha"`
+	Author  string    `json:"author"`
+	Date    time.Time `json:"date"`
+	Message string    `json:"message"`
 }
