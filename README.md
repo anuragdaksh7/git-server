@@ -271,6 +271,10 @@ a preview, text files get syntax highlighting, binary files show a size/info
 message, and `Raw` opens the decoded content in a new tab. Blame still uses
 placeholder data.
 
+On the repository root the README is rendered on page load from the same tree
+listing: the page picks `README`/`README.md`, fetches that blob and renders it,
+so the README always matches the branch selected in `?ref=`.
+
 ## Commit history
 
 `GET /repo/:repoName/commits/:branch` lists commits reachable from `:branch`,

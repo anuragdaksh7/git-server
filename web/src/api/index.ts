@@ -68,8 +68,6 @@ export const api = {
 
   commits: (repoName: string, ref: string, path = '') =>
     get<Commit[]>(withQuery(`${repoPath(repoName)}/commits/${encodeURIComponent(ref)}`, { path })),
-  readme: (repoName: string, ref: string, cloneUrl: string) =>
-    planned<Blob | null>(withQuery(`GET ${repoPath(repoName)}/readme`, { ref }), placeholder.readme(repoName, cloneUrl)),
   /** Raw bytes of a blob by its git object hash. */
   blob: (repoName: string, blobHash: string) =>
     getBytes(`${repoPath(repoName)}/blob/${encodeURIComponent(blobHash)}`),
