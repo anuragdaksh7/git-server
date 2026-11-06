@@ -1,8 +1,37 @@
 import { get, post, setToken } from './client'
-import type { CreateRepoReq, LoginReq, LoginRes, Me, Repo, SignUpReq, SignUpRes, TreeEntry } from './types'
+import * as placeholder from './placeholder'
+import { planned, plannedWrite } from './planned'
+import type {
+  Activity,
+  BlameRange,
+  Blob,
+  Commit,
+  CreateRepoReq,
+  Issue,
+  LoginReq,
+  LoginRes,
+  Me,
+  NewIssueReq,
+  Profile,
+  PullRequest,
+  Release,
+  Repo,
+  RepoMeta,
+  RepoSummary,
+  SignUpReq,
+  SignUpRes,
+  TreeEntry,
+  UpdateRepoReq,
+} from './types'
 
-export { ApiError } from './client'
+export { ApiError, clearToken } from './client'
 export type * from './types'
+
+const repoPath = (repoName: string) => `/repo/${encodeURIComponent(repoName)}`
+const withQuery = (path: string, query: Record<string, string>) => {
+  const params = new URLSearchParams(Object.entries(query).filter(([, v]) => v))
+  return params.size ? `${path}?${params}` : path
+}
 
 export const api = {
   signUp: (req: SignUpReq) => post<SignUpRes>('/user/create', req),
@@ -15,8 +44,38 @@ export const api = {
   createRepo: (req: CreateRepoReq) => post<Repo>('/repo/create', req),
   listRepos: () => get<Repo[]>('/repo/list'),
   /** One level of the repo tree. `path` defaults to the repo root. */
-  tree: (repoName: string, path = '') => {
-    const query = path ? `?path=${encodeURIComponent(path)}` : ''
-    return get<TreeEntry[]>(`/repo/${encodeURIComponent(repoName)}/tree${query}`)
-  },
+  tree: (repoName: string, path = '') => get<TreeEntry[]>(withQuery(`${repoPath(repoName)}/tree`, { path })),
+
+  profile: (me: Me, username = me.username) =>
+    planned<Profile>(`GET /user/${username}/profile`, placeholder.profile(username, username === me.username ? me.name : username)),
+  activity: (username: string) => planned<Activity>(`GET /user/${username}/activity`, placeholder.activity()),
+  starred: (username: string) => planned<RepoSummary[]>(`GET /user/${username}/starred`, placeholder.starred()),
+  follow: (username: string) => plannedWrite(`POST /user/${username}/follow`),
+  explore: (q: string) =>
+    planned<RepoSummary[]>(
+      withQuery('GET /explore', { q }),
+      placeholder.explore().filter((r) => `${r.owner}/${r.name} ${r.description}`.toLowerCase().includes(q.toLowerCase())),
+    ),
+
+  repoMeta: (repoName: string, owner: string) => planned<RepoMeta>(`GET ${repoPath(repoName)}`, placeholder.repoMeta(owner)),
+  updateRepo: (repoName: string, _req: UpdateRepoReq) => plannedWrite<Repo>(`PUT ${repoPath(repoName)}`),
+  deleteRepo: (repoName: string) => plannedWrite(`DELETE ${repoPath(repoName)}`),
+  star: (repoName: string) => plannedWrite(`POST ${repoPath(repoName)}/star`),
+  fork: (repoName: string) => plannedWrite(`POST ${repoPath(repoName)}/fork`),
+
+  commits: (repoName: string, owner: string, ref: string, path = '') =>
+    planned<Commit[]>(withQuery(`GET ${repoPath(repoName)}/commits`, { ref, path }), placeholder.commits(owner)),
+  readme: (repoName: string, ref: string, cloneUrl: string) =>
+    planned<Blob | null>(withQuery(`GET ${repoPath(repoName)}/readme`, { ref }), placeholder.readme(repoName, cloneUrl)),
+  blob: (repoName: string, ref: string, path: string) =>
+    planned<Blob>(withQuery(`GET ${repoPath(repoName)}/blob`, { ref, path }), placeholder.blob(path)),
+  blame: (repoName: string, owner: string, ref: string, path: string, lines: number) =>
+    planned<BlameRange[]>(withQuery(`GET ${repoPath(repoName)}/blame`, { ref, path }), placeholder.blame(owner, lines)),
+
+  issues: (repoName: string, owner: string) => planned<Issue[]>(`GET ${repoPath(repoName)}/issues`, placeholder.issues(owner, repoName)),
+  pulls: (repoName: string, owner: string) => planned<PullRequest[]>(`GET ${repoPath(repoName)}/pulls`, placeholder.pulls(owner, repoName)),
+  myIssues: (owner: string) => planned<Issue[]>('GET /issues', placeholder.issues(owner, 'firstrepo')),
+  myPulls: (owner: string) => planned<PullRequest[]>('GET /pulls', placeholder.pulls(owner, 'firstrepo')),
+  createIssue: (repoName: string, _req: NewIssueReq) => plannedWrite<Issue>(`POST ${repoPath(repoName)}/issues`),
+  releases: (repoName: string) => planned<Release[]>(`GET ${repoPath(repoName)}/releases`, placeholder.releases()),
 }

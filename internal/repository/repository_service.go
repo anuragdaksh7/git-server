@@ -113,6 +113,54 @@ func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string, 
 	return parseTree(out, dir), nil
 }
 
+func (s *service) CommitHistory(c context.Context, userId uuid.UUID, repoName string, branch string) ([]repositoryDto.CommitRes, error) {
+	var repo model.Repository
+	if err := s.DB.Where("created_by = ? AND name = ?", userId, repoName).First(&repo).Error; err != nil {
+		return nil, ErrRepoNotFound
+	}
+
+	dir, err := cleanTreePath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	repoDir := repoPath(repo.CreatedBy, repo.Name)
+
+	if err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", "HEAD").Run(); err != nil {
+		return []repositoryDto.CommitRes{}, nil
+	}
+
+	args := []string{"-C", repoDir, "log", "--pretty=format:%H%x09%an%x09%ad%x09%s", "--date=iso"}
+	if dir != "" {
+		args = append(args, "--", dir)
+	}
+
+	out, err := exec.CommandContext(c, "git", args...).Output()
+	if err != nil {
+		return nil, errors.New("git log failed: " + err.Error())
+	}
+
+	lines := strings.Split(string(out), "\n")
+	res := make([]repositoryDto.CommitRes, 0, len(lines))
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		fields := strings.SplitN(line, "\t", 4)
+		if len(fields) < 4 {
+			continue
+		}
+		res = append(res, repositoryDto.CommitRes{
+			SHA1Hash: fields[0],
+			Author:   fields[1],
+			Date:     fields[2],
+			Message:  fields[3],
+		})
+	}
+
+	return res, nil
+}
+
 // cleanTreePath normalises a user supplied path. "" or "/" means the repo root.
 func cleanTreePath(p string) (string, error) {
 	p = strings.Trim(strings.TrimSpace(p), "/")

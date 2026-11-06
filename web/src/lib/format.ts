@@ -23,3 +23,42 @@ export function timeAgo(iso: string) {
   }
   return 'just now'
 }
+
+/** Compact age like `2h`, `3d`, `8mo`, as used in dense lists. */
+export function shortAgo(iso: string) {
+  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
+  const units: [string, number][] = [
+    ['y', 31536000],
+    ['mo', 2592000],
+    ['w', 604800],
+    ['d', 86400],
+    ['h', 3600],
+    ['m', 60],
+  ]
+  for (const [unit, size] of units) {
+    if (seconds >= size) return `${Math.floor(seconds / size)}${unit}`
+  }
+  return 'now'
+}
+
+export function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+export function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+export function formatCount(n: number) {
+  return n.toLocaleString()
+}
+
+export function shortSha(sha: string) {
+  return sha.slice(0, 7)
+}
+
+export function errorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err)
+}

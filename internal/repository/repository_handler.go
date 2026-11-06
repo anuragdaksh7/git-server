@@ -72,3 +72,25 @@ func (h *Handler) DirTree(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
+
+func (h *Handler) CommitHistory(c *gin.Context) {
+	currentUser := c.MustGet("user").(model.User)
+	repoName := c.Param("repoName")
+	branch := c.Param("branch")
+
+	res, err := h.Service.CommitHistory(c, currentUser.ID, repoName, branch)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrInvalidPath):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrRepoNotFound), errors.Is(err, ErrPathNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		default:
+			logger.Logger.Error("Failed to get commit history: ", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}

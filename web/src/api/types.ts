@@ -49,4 +49,110 @@ export interface TreeEntry {
   fileName: string
   /** Path relative to the repo root; pass back as ?path= to descend. */
   path: string
+  /** Most recent commit touching this entry, once the server reports it. */
+  lastCommit?: Commit
+}
+
+export interface Language {
+  name: string
+  percent: number
+}
+
+export interface RepoMeta {
+  owner: string
+  description: string
+  visibility: 'public' | 'private'
+  topics: string[]
+  defaultBranch: string
+  branches: string[]
+  tags: number
+  stars: number
+  forks: number
+  watching: number
+  starred: boolean
+  latestRelease: string | null
+  languages: Language[]
+}
+
+export interface Commit {
+  sha: string
+  author: string
+  message: string
+  date: string
+}
+
+export interface Blob {
+  path: string
+  size: number
+  content: string
+}
+
+export interface BlameRange {
+  commit: Commit
+  lines: number
+}
+
+export interface Label {
+  name: string
+  color: 'accent' | 'ink' | 'muted'
+}
+
+export interface Issue {
+  number: number
+  repo: string
+  title: string
+  author: string
+  state: 'open' | 'closed'
+  createdAt: string
+  comments: number
+  labels: Label[]
+}
+
+export interface PullRequest extends Omit<Issue, 'state'> {
+  state: 'open' | 'closed' | 'merged'
+  head: string
+  base: string
+}
+
+export interface Release {
+  tag: string
+  name: string
+  date: string
+  notes: string
+  latest: boolean
+}
+
+export interface Profile {
+  username: string
+  name: string
+  bio: string
+  company: string
+  location: string
+  website: string
+  followers: number
+  following: number
+  isFollowing: boolean
+}
+
+export interface RepoSummary {
+  owner: string
+  name: string
+  description: string
+  language: string
+  stars: number
+  updatedAt: string
+}
+
+/** Contributions per day, oldest first, covering the last 52 weeks. */
+export type Activity = number[]
+
+export interface UpdateRepoReq {
+  name: string
+  description: string
+  visibility: 'public' | 'private'
+}
+
+export interface NewIssueReq {
+  title: string
+  body: string
 }

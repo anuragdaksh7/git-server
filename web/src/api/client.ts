@@ -19,6 +19,8 @@ function readToken() {
 
 export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token)
 
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY)
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = readToken()
   const res = await fetch(API_URL + path, {

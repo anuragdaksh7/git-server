@@ -61,6 +61,7 @@ func InitRouter(
 		repoRouter.POST("/create", repoHandler.Create)
 		repoRouter.GET("/list", repoHandler.List)
 		repoRouter.GET("/:repoName/tree", repoHandler.DirTree)
+		repoRouter.GET("/:repoName/commits/:branch", repoHandler.CommitHistory)
 	}
 }
 
