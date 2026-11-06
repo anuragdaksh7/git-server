@@ -108,6 +108,30 @@ func TestParseRefList(t *testing.T) {
 	}
 }
 
+func TestPreferredBranch(t *testing.T) {
+	cases := []struct {
+		branches []string
+		want     string
+	}{
+		{[]string{"develop", "main"}, "main"},
+		{[]string{"develop", "master"}, "master"},
+		{[]string{"alpha", "zeta"}, "alpha"},
+		{[]string{"feature/x", "main", "master"}, "main"},
+	}
+	for _, tc := range cases {
+		if got := preferredBranch(tc.branches); got != tc.want {
+			t.Errorf("preferredBranch(%v) = %q, want %q", tc.branches, got, tc.want)
+		}
+	}
+
+	if containsString([]string{"main"}, "master") {
+		t.Error("containsString reported a missing branch")
+	}
+	if !containsString([]string{"main", "master"}, "master") {
+		t.Error("containsString missed an existing branch")
+	}
+}
+
 func TestParseCommits(t *testing.T) {
 	// two records, NUL separated; the first message contains a tab
 	out := []byte("3f21dc49c7120b899baf2a0b62dcff1f5c978ca9\tAnurag Daksh\t2026-11-06T23:27:55+05:30\tsecond\twith tab\x00" +

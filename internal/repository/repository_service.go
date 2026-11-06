@@ -153,9 +153,14 @@ func (s *service) Refs(c context.Context, userId uuid.UUID, repoName string) (*r
 		return nil, errors.New("git for-each-ref failed: " + err.Error())
 	}
 	res.Branches = parseRefList(out)
-	if len(res.Branches) == 0 {
-		// Empty repo: still offer its default branch so the picker is usable.
+	switch {
+	case len(res.Branches) == 0:
 		res.Branches = []string{res.DefaultBranch}
+	case !containsString(res.Branches, res.DefaultBranch):
+		// HEAD points at an unborn branch. Common with a bare repo whose git
+		// defaulted to "master" but the first push used "main": asking for
+		// HEAD's branch would show an empty repo even though commits exist.
+		res.DefaultBranch = preferredBranch(res.Branches)
 	}
 
 	out, err = exec.CommandContext(c, "git", "-C", repoDir, "for-each-ref", "--format=%(refname:short)", "refs/tags").Output()
@@ -302,6 +307,26 @@ func parseRefList(out []byte) []string {
 		}
 	}
 	return res
+}
+
+func containsString(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+// preferredBranch picks a sensible default from existing branches when HEAD's
+// branch has no commits yet.
+func preferredBranch(branches []string) string {
+	for _, want := range []string{"main", "master"} {
+		if containsString(branches, want) {
+			return want
+		}
+	}
+	return branches[0]
 }
 
 // cleanTreePath normalises a user supplied path. "" or "/" means the repo root.

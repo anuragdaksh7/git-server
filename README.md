@@ -170,8 +170,11 @@ curl -s 'http://localhost:4000/repo/firstrepo/refs' -H "Authorization: Bearer $T
 ```
 
 `defaultBranch` comes from `git symbolic-ref --short HEAD`, so it works even
-before the first commit. For an empty repository `branches` contains just that
-default branch (so the picker is usable) and `tags` is `[]`.
+before the first commit. If HEAD points at an unborn branch but other branches
+exist (e.g. the repo was initialised on `master` and the first push only created
+`main`), it falls back to `main`, then `master`, then the first existing branch —
+otherwise the UI would show an empty repo. For an empty repository `branches`
+contains just that default branch (so the picker is usable) and `tags` is `[]`.
 
 ## Directory tree
 
