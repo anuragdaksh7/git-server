@@ -28,6 +28,7 @@ var (
 	ErrInvalidPath    = errors.New("invalid path")
 	ErrBranchNotFound = errors.New("branch not found")
 	ErrInvalidBranch  = errors.New("invalid branch name")
+	ErrBlobNotFound   = errors.New("blob not found")
 )
 
 type service struct {
