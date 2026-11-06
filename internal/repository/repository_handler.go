@@ -132,6 +132,8 @@ func (h *Handler) BlobData(c *gin.Context) {
 		switch {
 		case errors.Is(err, ErrRepoNotFound), errors.Is(err, ErrBlobNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, ErrBlobTooLarge):
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": err.Error()})
 		default:
 			logger.Logger.Error("Failed to get blob data: ", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

@@ -1,10 +1,9 @@
-import { get, post, setToken } from './client'
+import { get, getBytes, post, setToken } from './client'
 import * as placeholder from './placeholder'
 import { planned, plannedWrite } from './planned'
 import type {
   Activity,
   BlameRange,
-  Blob,
   Commit,
   CreateRepoReq,
   Issue,
@@ -71,8 +70,9 @@ export const api = {
     get<Commit[]>(withQuery(`${repoPath(repoName)}/commits/${encodeURIComponent(ref)}`, { path })),
   readme: (repoName: string, ref: string, cloneUrl: string) =>
     planned<Blob | null>(withQuery(`GET ${repoPath(repoName)}/readme`, { ref }), placeholder.readme(repoName, cloneUrl)),
-  blob: (repoName: string, ref: string, path: string) =>
-    planned<Blob>(withQuery(`GET ${repoPath(repoName)}/blob`, { ref, path }), placeholder.blob(path)),
+  /** Raw bytes of a blob by its git object hash. */
+  blob: (repoName: string, blobHash: string) =>
+    getBytes(`${repoPath(repoName)}/blob/${encodeURIComponent(blobHash)}`),
   blame: (repoName: string, owner: string, ref: string, path: string, lines: number) =>
     planned<BlameRange[]>(withQuery(`GET ${repoPath(repoName)}/blame`, { ref, path }), placeholder.blame(owner, lines)),
 

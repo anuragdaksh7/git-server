@@ -21,9 +21,24 @@ export default function FileView() {
   const isMarkdown = /\.(md|markdown)$/i.test(path)
   const [mode, setMode] = useState<Mode>(isMarkdown ? 'preview' : 'code')
 
-  const blob = useAsync(`blob:${repoName}:${ref}:${path}`, () => api.blob(repoName, ref, path))
+  // The blob endpoint takes a git object hash, so resolve path -> sha by
+  // listing the parent directory (one level) and picking the matching entry.
+  const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
+  const fileName = path.slice(path.lastIndexOf('/') + 1)
+  const listing = useAsync(`tree:${repoName}:${ref}:${parent}`, () => api.tree(repoName, ref, parent))
+  const entry = listing.data?.find((e) => e.objectType === 'blob' && e.fileName === fileName)
+  const raw = useAsync(`blob:${repoName}:${entry?.sha1Hash ?? ''}`, () =>
+    entry ? api.blob(repoName, entry.sha1Hash) : Promise.resolve(null),
+  )
+
+  const content = useMemo(() => (raw.data ? new TextDecoder().decode(raw.data) : ''), [raw.data])
+  const blob = useMemo(
+    () => (raw.data ? { path, size: raw.data.byteLength, content } : undefined),
+    [raw.data, content, path],
+  )
+
   const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, ref, path))
-  const lines = useMemo(() => blob.data?.content.replace(/\n$/, '').split('\n') ?? [], [blob.data])
+  const lines = useMemo(() => blob?.content.replace(/\n$/, '').split('\n') ?? [], [blob])
   const blame = useAsync(`blame:${repoName}:${ref}:${path}:${mode === 'blame'}:${lines.length}`, () =>
     mode === 'blame' && lines.length ? api.blame(repoName, me.username, ref, path, lines.length) : Promise.resolve(null),
   )
@@ -34,10 +49,13 @@ export default function FileView() {
   }, [lines, path])
 
   const selected = Number(hash.match(/^#L(\d+)$/)?.[1] ?? 0)
+  const isBinary = content.includes('\u0000')
+  const loadError = listing.error || raw.error || (listing.data && !entry ? `Not found on ${ref}` : '')
+  const loading = listing.loading || (entry !== undefined && raw.loading)
 
   const openRaw = () => {
-    if (!blob.data) return
-    const url = URL.createObjectURL(new Blob([blob.data.content], { type: 'text/plain;charset=utf-8' }))
+    if (!blob) return
+    const url = URL.createObjectURL(new Blob([blob.content], { type: 'text/plain;charset=utf-8' }))
     window.open(url, '_blank', 'noopener')
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   }
@@ -57,29 +75,31 @@ export default function FileView() {
             onChange={setMode}
             options={[...(isMarkdown ? [{ value: 'preview' as Mode, label: 'Preview' }] : []), { value: 'code', label: 'Code' }, { value: 'blame', label: 'Blame' }]}
           />
-          {blob.data && (
+          {blob && (
             <span className="mono muted">
-              {lines.length} lines · {formatBytes(blob.data.size)}
+              {lines.length} lines · {formatBytes(blob.size)}
             </span>
           )}
           <div className="file-actions">
             <button type="button" onClick={openRaw}>
               Raw
             </button>
-            <CopyButton text={blob.data?.content ?? ''} />
+            <CopyButton text={blob?.content ?? ''} />
             <Link to={href('/commits', { path })}>History</Link>
           </div>
         </div>
 
-        {blob.error ? (
+        {loadError ? (
           <div className="tree-message">
-            <Alert>{blob.error}</Alert>
+            <Alert>{loadError}</Alert>
           </div>
-        ) : !blob.data ? (
+        ) : loading || !blob ? (
           <Spinner />
+        ) : isBinary ? (
+          <div className="tree-message muted small">Binary file · {formatBytes(blob.size)} — preview not available.</div>
         ) : mode === 'preview' ? (
           <div className="readme-body">
-            <Markdown source={blob.data.content} />
+            <Markdown source={blob.content} />
           </div>
         ) : (
           <div className={mode === 'blame' ? 'code-view blame' : 'code-view'}>

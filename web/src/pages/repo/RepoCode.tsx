@@ -17,10 +17,15 @@ export default function RepoCode() {
 
   const tree = useAsync(`tree:${repoName}:${ref}:${path}`, () => api.tree(repoName, ref, path))
   const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, ref, path))
-  const hasReadme = !path && !!tree.data?.some((e) => e.objectType === 'blob' && /^readme(\.md)?$/i.test(e.fileName))
-  const readme = useAsync(`readme:${repoName}:${ref}:${hasReadme}`, () =>
-    hasReadme ? api.readme(repoName, ref, cloneUrl) : Promise.resolve(null),
-  )
+  // Root README is just another blob in the tree we already loaded.
+  const readmeEntry = !path
+    ? tree.data?.find((e) => e.objectType === 'blob' && /^readme(\.md)?$/i.test(e.fileName))
+    : undefined
+  const readme = useAsync(`readme:${repoName}:${ref}:${readmeEntry?.sha1Hash ?? ''}`, async () => {
+    if (!readmeEntry) return null
+    const bytes = await api.blob(repoName, readmeEntry.sha1Hash)
+    return { path: readmeEntry.path, content: new TextDecoder().decode(bytes) }
+  })
 
   const sorted = useMemo(
     () => [...(tree.data ?? [])].sort((a, b) => rank(a) - rank(b) || a.fileName.localeCompare(b.fileName)),
@@ -103,6 +108,11 @@ export default function RepoCode() {
           )}
         </div>
 
+        {readme.error && (
+          <div className="tree-message">
+            <Alert>{readme.error}</Alert>
+          </div>
+        )}
         {readme.data && (
           <article className="readme">
             <div className="readme-head eyebrow">{readme.data.path}</div>

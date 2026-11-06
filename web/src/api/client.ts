@@ -21,7 +21,8 @@ export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token
 
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY)
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** Shared auth/error handling; callers decide how to read the body. */
+async function send(path: string, init?: RequestInit): Promise<Response> {
   const token = readToken()
   const res = await fetch(API_URL + path, {
     ...init,
@@ -31,19 +32,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   })
-  const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     if (res.status === 401) {
       // a rejected token is dead weight; drop it so the next login starts clean
       localStorage.removeItem(TOKEN_KEY)
       console.warn(`[api] 401 on ${path} — token ${token ? 'was sent' : 'was missing'}`)
     }
+    const body = await res.json().catch(() => ({}))
     throw new ApiError(res.status, body.error ?? res.statusText)
   }
+  return res
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await send(path, init)
+  const body = await res.json()
   return body.data as T
 }
 
 export const get = <T>(path: string) => request<T>(path)
+
+/** For endpoints that return the file itself (blob data), not JSON. */
+export const getBytes = async (path: string) => (await send(path)).arrayBuffer()
 
 export const post = <T>(path: string, payload: unknown) =>
   request<T>(path, { method: 'POST', body: JSON.stringify(payload) })

@@ -69,6 +69,7 @@ the token from `/user/login` is valid for 30 days.
 | `GET` | `/repo/list` | ✅ | List your repos, newest first |
 | `GET` | `/repo/:repoName/refs` | ✅ | Real default branch, branches and tags |
 | `GET` | `/repo/:repoName/tree` | ✅ | One level of a repo's tree; `?ref=` and `?path=<dir>` optional, default HEAD/root |
+| `GET` | `/repo/:repoName/blob/:blobHash` | ✅ | Raw bytes of a blob by git object hash (4–64 hex) |
 | `GET` | `/repo/:repoName/commits/:branch` | ✅ | Commit history for a branch; `?path=<dir>` and `?limit=` optional |
 | `ANY` | `/git/*` | Basic | Git Smart HTTP endpoints |
 
@@ -213,6 +214,31 @@ nested below it costs the same as an empty one.
 | `path` contains `..`, `.`, `//`, or `\` | `400 invalid path` |
 | `ref` starts with `-` or contains whitespace | `400 invalid branch name` |
 
+## Blob contents
+
+`GET /repo/:repoName/blob/:blobHash` returns the raw bytes of one blob, selected
+by git object hash — the `sha1Hash` from a tree entry. The frontend resolves a
+`path` by listing its parent directory (one level) and looking up the entry, then
+calls this route.
+
+```bash
+# sha1Hash from GET /repo/firstrepo/tree?ref=main
+curl -s 'http://localhost:4000/repo/firstrepo/blob/587be6b4c3f93f93c489c0111bba5596147a26cb' \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The response is the file itself (`application/octet-stream`), not JSON.
+
+| Case | Response |
+|---|---|
+| Valid blob hash | `200` with raw bytes |
+| Unknown repo, malformed hash, missing object, or a tree/commit hash | `404 blob not found` |
+| Blob larger than 10 MiB | `413 blob too large` |
+
+Hashes must be 4–64 hex characters, so a `-`-prefixed value can never be read
+as a git option, and `cat-file blob` rejects hashes that point at trees or
+commits instead of blobs.
+
 ## Frontend
 
 A Vite + React 19 SPA lives in `web/`. In dev it proxies `/api/*` to the Go
@@ -230,13 +256,20 @@ npm run build    # type-check + production bundle into web/dist
 | `/` | Dashboard: profile, create repo, repo list — each row links into the browser |
 | `/repo/:repoName` | Tree browser; `?ref=<branch>` and `?path=<dir>` select the branch and node, breadcrumbs ascend |
 | `/repo/:repoName/commits` | Commit history for the selected branch, optionally filtered by `?path=` |
-| `/repo/:repoName/blob` | File view (still placeholder data) |
+| `/repo/:repoName/blob` | File view: code, Markdown preview and blame; `?path=` selects the file |
 
 The browser requests exactly one level at a time and opens directories on click,
 so only the current node is ever fetched. The branch picker is driven by
 `/repo/:repoName/refs`, so the default branch is whatever git actually has
 (`main`, `master`, …) rather than a hardcoded guess. Tree, commit bar and commit
 history are all fetched for the branch currently selected in `?ref=`.
+
+File contents come from `/repo/:repoName/blob/:blobHash`. Since the view only
+knows the path from the URL, it lists the parent directory with the tree endpoint
+and takes that entry's `sha1Hash`, then fetches the raw blob. Markdown files get
+a preview, text files get syntax highlighting, binary files show a size/info
+message, and `Raw` opens the decoded content in a new tab. Blame still uses
+placeholder data.
 
 ## Commit history
 

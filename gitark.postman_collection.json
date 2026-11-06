@@ -91,6 +91,11 @@
       "key": "ref",
       "value": "HEAD",
       "type": "string"
+    },
+    {
+      "key": "blobHash",
+      "value": "",
+      "type": "string"
     }
   ],
   "item": [
@@ -408,7 +413,10 @@
                   "",
                   "const entries = pm.response.json().data;",
                   "const firstDir = entries.find(e => e.objectType === 'tree');",
-                  "if (firstDir) { console.log('descend with treePath =', firstDir.path); }"
+                  "if (firstDir) { console.log('descend with treePath =', firstDir.path); }",
+                  "",
+                  "const firstBlob = entries.find(e => e.objectType === 'blob');",
+                  "if (firstBlob) { pm.collectionVariables.set('blobHash', firstBlob.sha1Hash); }"
                 ]
               }
             }
@@ -496,6 +504,39 @@
                   "    pm.expect(commits[0]).to.have.all.keys('sha', 'author', 'date', 'message');",
                   "  });",
                   "}"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Blob",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repo/{{repoName}}/blob/{{blobHash}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repo",
+                "{{repoName}}",
+                "blob",
+                "{{blobHash}}"
+              ]
+            },
+            "description": "Returns the raw bytes (`application/octet-stream`) of one blob, selected by git object hash. Take `sha1Hash` from any blob entry returned by the Tree request; the Tree test script stores the first one in `{{blobHash}}` automatically.\n\n- valid blob hash -> `200` with the file contents (not JSON)\n- unknown repo / malformed hash / missing object / tree or commit hash -> `404`\n- blob larger than 10 MiB -> `413 blob too large`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('has a body', () => pm.expect(pm.response.text().length).to.be.above(0));"
                 ]
               }
             }

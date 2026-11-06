@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,13 @@ import (
 
 var validRepoName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
+// Abbreviated or full SHA-1 (40) / SHA-256 (64). Anything else is rejected
+// before it can reach git as an option.
+var validBlobHash = regexp.MustCompile(`^[0-9a-fA-F]{4,64}$`)
+
+// Source files should be small; refuse to buffer a stray multi-GB object.
+const maxBlobBytes = 10 << 20
+
 var (
 	ErrRepoNotFound   = errors.New("repository not found")
 	ErrPathNotFound   = errors.New("path not found")
@@ -29,6 +37,7 @@ var (
 	ErrBranchNotFound = errors.New("branch not found")
 	ErrInvalidBranch  = errors.New("invalid branch name")
 	ErrBlobNotFound   = errors.New("blob not found")
+	ErrBlobTooLarge   = errors.New("blob too large")
 )
 
 type service struct {
@@ -173,17 +182,35 @@ func (s *service) Refs(c context.Context, userId uuid.UUID, repoName string) (*r
 	return res, nil
 }
 
-func (s *service)	BlobData(c context.Context, userId uuid.UUID, repoName string, blobHash string) ([]byte, error) {
+func (s *service) BlobData(c context.Context, userId uuid.UUID, repoName string, blobHash string) ([]byte, error) {
 	var repo model.Repository
 	if err := s.DB.Where("created_by = ? AND name = ?", userId, repoName).First(&repo).Error; err != nil {
 		return nil, ErrRepoNotFound
 	}
 
+	if !validBlobHash.MatchString(blobHash) {
+		return nil, ErrBlobNotFound
+	}
+
 	repoDir := repoPath(repo.CreatedBy, repo.Name)
 
-	out, err := exec.CommandContext(c, "git", "-C", repoDir, "cat-file", "-p", blobHash).Output()
+	sizeOut, err := exec.CommandContext(c, "git", "-C", repoDir, "cat-file", "-s", blobHash).Output()
 	if err != nil {
-		return nil, errors.New("git cat-file failed: " + err.Error())
+		return nil, ErrBlobNotFound
+	}
+	size, err := strconv.ParseInt(strings.TrimSpace(string(sizeOut)), 10, 64)
+	if err != nil || size < 0 {
+		return nil, ErrBlobNotFound
+	}
+	if size > maxBlobBytes {
+		return nil, ErrBlobTooLarge
+	}
+
+	// `cat-file blob` also rejects hashes that point at trees/commits, so a
+	// valid-but-wrong object type stays a 404 rather than leaking its contents.
+	out, err := exec.CommandContext(c, "git", "-C", repoDir, "cat-file", "blob", blobHash).Output()
+	if err != nil {
+		return nil, ErrBlobNotFound
 	}
 
 	return out, nil

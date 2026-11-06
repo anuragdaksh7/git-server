@@ -108,6 +108,26 @@ func TestParseRefList(t *testing.T) {
 	}
 }
 
+func TestValidBlobHash(t *testing.T) {
+	valid := []string{
+		"45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
+		"45b983b",
+		strings.Repeat("a", 64),
+	}
+	for _, hash := range valid {
+		if !validBlobHash.MatchString(hash) {
+			t.Errorf("validBlobHash(%q) = false, want true", hash)
+		}
+	}
+
+	invalid := []string{"", "--batch", "-p", "HEAD:README.md", "abc", "xyz1234", "abc/def", "abc def"}
+	for _, hash := range invalid {
+		if validBlobHash.MatchString(hash) {
+			t.Errorf("validBlobHash(%q) = true, want false", hash)
+		}
+	}
+}
+
 func TestPreferredBranch(t *testing.T) {
 	cases := []struct {
 		branches []string
