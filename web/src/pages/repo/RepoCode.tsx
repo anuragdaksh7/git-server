@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { api, type TreeEntry } from '../../api'
-import { useMe } from '../../components/me'
 import { Alert } from '../../components/ui'
 import { Markdown } from '../../lib/Markdown'
 import { shortAgo, shortSha } from '../../lib/format'
@@ -12,13 +11,12 @@ import { useRepo } from './context'
 const rank = (entry: TreeEntry) => (entry.objectType === 'tree' ? 0 : 1)
 
 export default function RepoCode() {
-  const me = useMe()
   const { repoName, meta, ref, cloneUrl, href } = useRepo()
   const [params] = useSearchParams()
   const path = params.get('path') ?? ''
 
-  const tree = useAsync(`tree:${repoName}:${ref}:${path}`, () => api.tree(repoName, path))
-  const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, me.username, ref, path))
+  const tree = useAsync(`tree:${repoName}:${ref}:${path}`, () => api.tree(repoName, ref, path))
+  const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, ref, path))
   const hasReadme = !path && !!tree.data?.some((e) => e.objectType === 'blob' && /^readme(\.md)?$/i.test(e.fileName))
   const readme = useAsync(`readme:${repoName}:${ref}:${hasReadme}`, () =>
     hasReadme ? api.readme(repoName, ref, cloneUrl) : Promise.resolve(null),

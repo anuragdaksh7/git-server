@@ -86,6 +86,11 @@
       "key": "treePath",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "ref",
+      "value": "HEAD",
+      "type": "string"
     }
   ],
   "item": [
@@ -368,7 +373,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/repo/{{repoName}}/tree?path={{treePath}}",
+              "raw": "{{baseUrl}}/repo/{{repoName}}/tree?ref={{ref}}&path={{treePath}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -379,13 +384,18 @@
               ],
               "query": [
                 {
+                  "key": "ref",
+                  "value": "{{ref}}",
+                  "description": "Branch, tag or commit-ish. Empty means HEAD."
+                },
+                {
                   "key": "path",
                   "value": "{{treePath}}",
                   "description": "Directory to list. Empty (or /) means the repository root."
                 }
               ]
             },
-            "description": "Lists exactly one level of the repo tree, never descendants. `path` picks the node; default root. Pass a returned entry's `path` back in to descend.\n\nReturns `{ \"data\": [ { fileMode, objectType, sha1Hash, fileName, path } ] }`.\n\n- empty repo -> `200` with `[]`\n- unknown repo / path is a file or missing -> `404`\n- `..`, `.`, `//` or `\\\\` in path -> `400`"
+            "description": "Lists exactly one level of the repo tree, never descendants. `ref` picks the branch/tag/commit-ish (empty = HEAD) and `path` picks the node (empty = root). Pass a returned entry's `path` back in to descend.\n\nReturns `{ \"data\": [ { fileMode, objectType, sha1Hash, fileName, path } ] }`.\n\n- empty repo with ref omitted/HEAD -> `200` with `[]`\n- unknown repo / path is a file or missing / unknown ref -> `404`\n- `..`, `.`, `//` or `\\` in path -> `400 invalid path`\n- leading `-` or whitespace in ref -> `400 invalid branch name`"
           },
           "event": [
             {
@@ -399,6 +409,93 @@
                   "const entries = pm.response.json().data;",
                   "const firstDir = entries.find(e => e.objectType === 'tree');",
                   "if (firstDir) { console.log('descend with treePath =', firstDir.path); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Refs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repo/{{repoName}}/refs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repo",
+                "{{repoName}}",
+                "refs"
+              ]
+            },
+            "description": "Returns the branch HEAD points at plus every branch and tag in the repo: `{ \"data\": { defaultBranch, branches, tags } }`.\n\n`defaultBranch` comes from `git symbolic-ref --short HEAD` and works even for an empty repo, where `branches` is just that one name and `tags` is `[]`. Unknown repo -> `404`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json().data;",
+                  "pm.test('has a default branch', () => pm.expect(data.defaultBranch).to.be.a('string').and.not.empty);",
+                  "pm.test('branches is an array', () => pm.expect(data.branches).to.be.an('array'));",
+                  "pm.test('tags is an array', () => pm.expect(data.tags).to.be.an('array'));",
+                  "if (data.defaultBranch) { pm.collectionVariables.set('ref', data.defaultBranch); }"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Commits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/repo/{{repoName}}/commits/{{ref}}?path={{treePath}}&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "repo",
+                "{{repoName}}",
+                "commits",
+                "{{ref}}"
+              ],
+              "query": [
+                {
+                  "key": "path",
+                  "value": "{{treePath}}",
+                  "description": "Optional: only commits touching this directory."
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Optional: 1-200, default 50."
+                }
+              ]
+            },
+            "description": "Lists commits reachable from `:branch` (branch, tag or full SHA), newest first. `path` restricts history to commits touching that directory; `limit` is 1-200 (default 50).\n\nReturns `{ \"data\": [ { sha, author, date, message } ] }`.\n\n- empty repo -> `200` with `[]`\n- unknown repo / unknown branch -> `404`\n- leading `-` or whitespace in branch -> `400 invalid branch name`\n- `..`, `.`, `//` or `\\` in path -> `400 invalid path`"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('data is an array', () => pm.expect(pm.response.json().data).to.be.an('array'));",
+                  "const commits = pm.response.json().data;",
+                  "if (commits.length) {",
+                  "  pm.test('commit shape', () => {",
+                  "    pm.expect(commits[0]).to.have.all.keys('sha', 'author', 'date', 'message');",
+                  "  });",
+                  "}"
                 ]
               }
             }

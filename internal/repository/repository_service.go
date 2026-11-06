@@ -81,7 +81,7 @@ func (s *service) List(c context.Context, userId uuid.UUID) ([]repositoryDto.Rep
 	return res, nil
 }
 
-func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string, path string) ([]repositoryDto.DirTreeRes, error) {
+func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string, ref string, path string) ([]repositoryDto.DirTreeRes, error) {
 	var repo model.Repository
 	if err := s.DB.Where("created_by = ? AND name = ?", userId, repoName).First(&repo).Error; err != nil {
 		return nil, ErrRepoNotFound
@@ -94,27 +94,108 @@ func (s *service) DirTree(c context.Context, userId uuid.UUID, repoName string, 
 
 	repoDir := repoPath(repo.CreatedBy, repo.Name)
 
-	// No commits yet: an empty repo has no HEAD, which is a valid empty listing.
-	if err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", "HEAD").Run(); err != nil {
-		return []repositoryDto.DirTreeRes{}, nil
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		ref = "HEAD"
+	}
+	if !safeRef(ref) {
+		return nil, ErrInvalidBranch
 	}
 
-	ref := "HEAD"
+	sha, err := resolveCommit(c, repoDir, ref)
+	if err != nil {
+		// No commits yet: an empty repo has no HEAD, which is a valid empty listing.
+		if unbornRef(c, repoDir, ref) {
+			return []repositoryDto.DirTreeRes{}, nil
+		}
+		return nil, err
+	}
+
+	target := sha
 	if dir != "" {
-		ref = "HEAD:" + dir
-		out, err := exec.CommandContext(c, "git", "-C", repoDir, "cat-file", "-t", ref).Output()
+		target = sha + ":" + dir
+		out, err := exec.CommandContext(c, "git", "-C", repoDir, "cat-file", "-t", target).Output()
 		if err != nil || strings.TrimSpace(string(out)) != "tree" {
 			return nil, ErrPathNotFound
 		}
 	}
 
 	// No -r: exactly one level below the requested node.
-	out, err := exec.CommandContext(c, "git", "-C", repoDir, "ls-tree", "-z", ref).Output()
+	out, err := exec.CommandContext(c, "git", "-C", repoDir, "ls-tree", "-z", target).Output()
 	if err != nil {
 		return nil, errors.New("git ls-tree failed: " + err.Error())
 	}
 
 	return parseTree(out, dir), nil
+}
+
+// Refs reports the branch HEAD points at plus every branch and tag in the repo.
+// The frontend needs this because "main" is not a safe default for old repos.
+func (s *service) Refs(c context.Context, userId uuid.UUID, repoName string) (*repositoryDto.RefsRes, error) {
+	var repo model.Repository
+	if err := s.DB.Where("created_by = ? AND name = ?", userId, repoName).First(&repo).Error; err != nil {
+		return nil, ErrRepoNotFound
+	}
+
+	repoDir := repoPath(repo.CreatedBy, repo.Name)
+	res := &repositoryDto.RefsRes{Branches: []string{}, Tags: []string{}}
+
+	// Works even before the first commit: HEAD is an unborn branch symref.
+	if out, err := exec.CommandContext(c, "git", "-C", repoDir, "symbolic-ref", "--short", "HEAD").Output(); err == nil {
+		res.DefaultBranch = strings.TrimSpace(string(out))
+	}
+	if res.DefaultBranch == "" {
+		res.DefaultBranch = "main"
+	}
+
+	out, err := exec.CommandContext(c, "git", "-C", repoDir, "for-each-ref", "--format=%(refname:short)", "refs/heads").Output()
+	if err != nil {
+		return nil, errors.New("git for-each-ref failed: " + err.Error())
+	}
+	res.Branches = parseRefList(out)
+	if len(res.Branches) == 0 {
+		// Empty repo: still offer its default branch so the picker is usable.
+		res.Branches = []string{res.DefaultBranch}
+	}
+
+	out, err = exec.CommandContext(c, "git", "-C", repoDir, "for-each-ref", "--format=%(refname:short)", "refs/tags").Output()
+	if err != nil {
+		return nil, errors.New("git for-each-ref failed: " + err.Error())
+	}
+	res.Tags = parseRefList(out)
+
+	return res, nil
+}
+
+// resolveCommit turns any commit-ish (branch, tag, SHA, HEAD) into a full SHA.
+func resolveCommit(c context.Context, repoDir string, ref string) (string, error) {
+	out, err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", ref+"^{commit}").Output()
+	if err != nil {
+		return "", ErrBranchNotFound
+	}
+	sha := strings.TrimSpace(string(out))
+	if sha == "" {
+		return "", ErrBranchNotFound
+	}
+	return sha, nil
+}
+
+// unbornRef reports whether a failed lookup is just a branch with no commits
+// yet rather than a typo. True for HEAD, for the branch HEAD points at (even
+// while other branches exist), and for any ref in a repo with no commits.
+func unbornRef(c context.Context, repoDir string, ref string) bool {
+	if ref == "HEAD" {
+		return true
+	}
+
+	if out, err := exec.CommandContext(c, "git", "-C", repoDir, "symbolic-ref", "--short", "HEAD").Output(); err == nil {
+		if strings.TrimSpace(string(out)) == ref {
+			return true
+		}
+	}
+
+	out, err := exec.CommandContext(c, "git", "-C", repoDir, "rev-list", "--all", "--count").Output()
+	return err == nil && strings.TrimSpace(string(out)) == "0"
 }
 
 // CommitHistory lists commits reachable from branch, optionally restricted to
@@ -132,10 +213,6 @@ func (s *service) CommitHistory(c context.Context, userId uuid.UUID, repoName st
 
 	repoDir := repoPath(repo.CreatedBy, repo.Name)
 
-	if err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", "HEAD").Run(); err != nil {
-		return []repositoryDto.CommitRes{}, nil
-	}
-
 	ref := strings.TrimSpace(branch)
 	if ref == "" {
 		ref = "HEAD"
@@ -143,8 +220,12 @@ func (s *service) CommitHistory(c context.Context, userId uuid.UUID, repoName st
 	if !safeRef(ref) {
 		return nil, ErrInvalidBranch
 	}
-	if err := exec.CommandContext(c, "git", "-C", repoDir, "rev-parse", "--verify", "--quiet", ref+"^{commit}").Run(); err != nil {
-		return nil, ErrBranchNotFound
+	if _, err := resolveCommit(c, repoDir, ref); err != nil {
+		// No commits yet: empty history beats a 404 for the default branch.
+		if unbornRef(c, repoDir, ref) {
+			return []repositoryDto.CommitRes{}, nil
+		}
+		return nil, err
 	}
 
 	if limit <= 0 || limit > maxCommitLimit {
@@ -209,6 +290,17 @@ func parseCommits(out []byte) []repositoryDto.CommitRes {
 		})
 	}
 
+	return res
+}
+
+// parseRefList decodes `git for-each-ref --format=%(refname:short)` output.
+func parseRefList(out []byte) []string {
+	res := make([]string, 0)
+	for _, line := range strings.Split(string(out), "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			res = append(res, line)
+		}
+	}
 	return res
 }
 

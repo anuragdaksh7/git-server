@@ -21,7 +21,7 @@ type DirTreeRes struct {
 	ObjectType string `json:"objectType"`
 	SHA1Hash   string `json:"sha1Hash"`
 	FileName   string `json:"fileName"`
-	Path string `json:"path"`
+	Path       string `json:"path"`
 }
 
 type CommitRes struct {
@@ -29,4 +29,12 @@ type CommitRes struct {
 	Author  string    `json:"author"`
 	Date    time.Time `json:"date"`
 	Message string    `json:"message"`
+}
+
+// RefsRes is what the branch picker needs: the branch HEAD points at and the
+// branches/tags that actually exist in the repo.
+type RefsRes struct {
+	DefaultBranch string   `json:"defaultBranch"`
+	Branches      []string `json:"branches"`
+	Tags          []string `json:"tags"`
 }

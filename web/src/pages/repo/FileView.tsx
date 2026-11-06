@@ -22,7 +22,7 @@ export default function FileView() {
   const [mode, setMode] = useState<Mode>(isMarkdown ? 'preview' : 'code')
 
   const blob = useAsync(`blob:${repoName}:${ref}:${path}`, () => api.blob(repoName, ref, path))
-  const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, me.username, ref, path))
+  const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, ref, path))
   const lines = useMemo(() => blob.data?.content.replace(/\n$/, '').split('\n') ?? [], [blob.data])
   const blame = useAsync(`blame:${repoName}:${ref}:${path}:${mode === 'blame'}:${lines.length}`, () =>
     mode === 'blame' && lines.length ? api.blame(repoName, me.username, ref, path, lines.length) : Promise.resolve(null),

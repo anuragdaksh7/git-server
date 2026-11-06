@@ -12,13 +12,27 @@ export default function RepoLayout() {
   const { repoName = '' } = useParams()
   const [params] = useSearchParams()
   const { pathname } = useLocation()
-  const meta = useAsync(`meta:${repoName}`, () => api.repoMeta(repoName, me.username))
+  // Metadata is still a placeholder, but refs come from git, so the default
+  // branch and branch list are always real.
+  const metaState = useAsync(`meta:${repoName}`, () => api.repoMeta(repoName, me.username))
+  const refsState = useAsync(`refs:${repoName}`, () => api.refs(repoName))
   const issues = useAsync(`issues:${repoName}`, () => api.issues(repoName, me.username))
   const pulls = useAsync(`pulls:${repoName}`, () => api.pulls(repoName, me.username))
   const [actionError, setActionError] = useState('')
 
+  const loadError = metaState.error || refsState.error
+  const meta =
+    metaState.data && refsState.data
+      ? {
+          ...metaState.data,
+          defaultBranch: refsState.data.defaultBranch,
+          branches: refsState.data.branches,
+          tags: refsState.data.tags.length,
+        }
+      : undefined
+
   const base = `/repo/${encodeURIComponent(repoName)}`
-  const ref = params.get('ref') || meta.data?.defaultBranch || 'main'
+  const ref = params.get('ref') || meta?.defaultBranch || ''
   const refQuery = params.get('ref') ? { ref } : {}
 
   const href = (sub: string, query: Record<string, string> = {}) => {
@@ -45,19 +59,19 @@ export default function RepoLayout() {
             <div className="repo-owner">
               <Link to="/">{me.username}</Link>
               <span>/</span>
-              {meta.data && <span className="visibility">{meta.data.visibility}</span>}
+              {meta && <span className="visibility">{meta.visibility}</span>}
             </div>
             <h1>{repoName}</h1>
           </div>
-          {meta.data && (
+          {meta && (
             <div className="button-group">
               <button type="button" onClick={() => act(() => api.star(repoName))}>
-                <span>{meta.data.starred ? 'Starred' : 'Star'}</span>
-                <span className="mono muted">{formatCount(meta.data.stars)}</span>
+                <span>{meta.starred ? 'Starred' : 'Star'}</span>
+                <span className="mono muted">{formatCount(meta.stars)}</span>
               </button>
               <button type="button" onClick={() => act(() => api.fork(repoName))}>
                 <span>Fork</span>
-                <span className="mono muted">{formatCount(meta.data.forks)}</span>
+                <span className="mono muted">{formatCount(meta.forks)}</span>
               </button>
             </div>
           )}
@@ -74,17 +88,17 @@ export default function RepoLayout() {
         />
       </div>
 
-      {meta.error ? (
+      {loadError ? (
         <div className="page repo-body">
-          <Alert>{meta.error}</Alert>
+          <Alert>{loadError}</Alert>
         </div>
-      ) : !meta.data ? (
+      ) : !meta ? (
         <Spinner />
       ) : (
         <RepoCtx.Provider
           value={{
             repoName,
-            meta: meta.data,
+            meta,
             ref,
             cloneUrl: `${__BACKEND_URL__}/git/${me.id}/${repoName}.git`,
             href,

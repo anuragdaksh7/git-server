@@ -81,6 +81,13 @@ export interface Commit {
   date: string
 }
 
+/** Live branch/tag data, merged into RepoMeta for the picker. */
+export interface RepoRefs {
+  defaultBranch: string
+  branches: string[]
+  tags: string[]
+}
+
 export interface Blob {
   path: string
   size: number

@@ -89,6 +89,25 @@ func TestSafeRef(t *testing.T) {
 	}
 }
 
+func TestParseRefList(t *testing.T) {
+	out := []byte("develop\nmain\nrelease/1.0\n\n")
+
+	refs := parseRefList(out)
+	want := []string{"develop", "main", "release/1.0"}
+	if len(refs) != len(want) {
+		t.Fatalf("got %d refs, want %d: %v", len(refs), len(want), refs)
+	}
+	for i := range want {
+		if refs[i] != want[i] {
+			t.Errorf("refs[%d] = %q, want %q", i, refs[i], want[i])
+		}
+	}
+
+	if got := parseRefList(nil); len(got) != 0 {
+		t.Errorf("empty input: got %d refs, want 0", len(got))
+	}
+}
+
 func TestParseCommits(t *testing.T) {
 	// two records, NUL separated; the first message contains a tab
 	out := []byte("3f21dc49c7120b899baf2a0b62dcff1f5c978ca9\tAnurag Daksh\t2026-11-06T23:27:55+05:30\tsecond\twith tab\x00" +

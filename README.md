@@ -67,7 +67,8 @@ the token from `/user/login` is valid for 30 days.
 | `GET` | `/user/me` | ✅ | Current user profile |
 | `POST` | `/repo/create` | ✅ | Create a repo → `{ data: { id, name, createdAt } }` |
 | `GET` | `/repo/list` | ✅ | List your repos, newest first |
-| `GET` | `/repo/:repoName/tree` | ✅ | One level of a repo's tree; `?path=<dir>` selects the directory, default root |
+| `GET` | `/repo/:repoName/refs` | ✅ | Real default branch, branches and tags |
+| `GET` | `/repo/:repoName/tree` | ✅ | One level of a repo's tree; `?ref=` and `?path=<dir>` optional, default HEAD/root |
 | `GET` | `/repo/:repoName/commits/:branch` | ✅ | Commit history for a branch; `?path=<dir>` and `?limit=` optional |
 | `ANY` | `/git/*` | Basic | Git Smart HTTP endpoints |
 
@@ -148,18 +149,43 @@ when they do.
 > publicly, and drop `GIT_HTTP_EXPORT_ALL` so only authenticated requests reach
 > the CGI handler.
 
+## Refs
+
+`GET /repo/:repoName/refs` reports what HEAD points at and which branches and
+tags exist. The UI uses it instead of assuming the default branch is `main`,
+which is not true for repos created with an older git.
+
+```bash
+curl -s 'http://localhost:4000/repo/firstrepo/refs' -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "data": {
+    "defaultBranch": "master",
+    "branches": ["master", "feature/tree-view"],
+    "tags": ["v0.1.0"]
+  }
+}
+```
+
+`defaultBranch` comes from `git symbolic-ref --short HEAD`, so it works even
+before the first commit. For an empty repository `branches` contains just that
+default branch (so the picker is usable) and `tags` is `[]`.
+
 ## Directory tree
 
 `GET /repo/:repoName/tree` returns **exactly one level** of a repository's tree —
 the direct children of the requested node, never grandchildren. The node is
 chosen with the `path` query parameter; omit it (or pass `/`) for the root.
+`ref` selects the branch, tag or commit-ish; omit it for `HEAD`.
 
 ```bash
-# root of the repo
+# root of the repo at the default branch (HEAD)
 curl -s 'http://localhost:4000/repo/firstrepo/tree' -H "Authorization: Bearer $TOKEN"
 
-# one level inside src/app
-curl -s 'http://localhost:4000/repo/firstrepo/tree?path=src/app' -H "Authorization: Bearer $TOKEN"
+# one level inside src/app on another branch
+curl -s 'http://localhost:4000/repo/firstrepo/tree?ref=develop&path=src/app' -H "Authorization: Bearer $TOKEN"
 ```
 
 ```json
@@ -177,10 +203,12 @@ nested below it costs the same as an empty one.
 
 | Case | Response |
 |---|---|
-| Empty repository (no commits) | `200` with `data: []` |
+| Empty repository (no commits, any `ref`) | `200` with `data: []` |
 | Unknown repo name, or one you don't own | `404 repository not found` |
 | `path` is a file, or doesn't exist | `404 path not found` |
+| `ref` is not a branch, tag or commit-ish in the repo | `404 branch not found` |
 | `path` contains `..`, `.`, `//`, or `\` | `400 invalid path` |
+| `ref` starts with `-` or contains whitespace | `400 invalid branch name` |
 
 ## Frontend
 
@@ -197,10 +225,15 @@ npm run build    # type-check + production bundle into web/dist
 | Route | Page |
 |---|---|
 | `/` | Dashboard: profile, create repo, repo list — each row links into the browser |
-| `/repo/:repoName` | Tree browser; `?path=<dir>` selects the node, breadcrumbs ascend |
+| `/repo/:repoName` | Tree browser; `?ref=<branch>` and `?path=<dir>` select the branch and node, breadcrumbs ascend |
+| `/repo/:repoName/commits` | Commit history for the selected branch, optionally filtered by `?path=` |
+| `/repo/:repoName/blob` | File view (still placeholder data) |
 
 The browser requests exactly one level at a time and opens directories on click,
-so only the current node is ever fetched.
+so only the current node is ever fetched. The branch picker is driven by
+`/repo/:repoName/refs`, so the default branch is whatever git actually has
+(`main`, `master`, …) rather than a hardcoded guess. Tree, commit bar and commit
+history are all fetched for the branch currently selected in `?ref=`.
 
 ## Commit history
 
@@ -228,9 +261,10 @@ curl -s 'http://localhost:4000/repo/firstrepo/commits/main?path=src/app' -H "Aut
 ```
 
 `:branch` accepts any commit-ish that resolves inside the repo — branch, tag or
-full SHA. `?path=` is an optional filter (omit it for the whole repo); it maps to
-`git log <branch> -- <path>`, so it also works for directories that no longer
-exist on the branch.
+full SHA. Branch names with slashes (`feature/tree-view`) work too: the route is
+a catch-all, so there is no need to double-encode `%2F`. `?path=` is an optional
+filter (omit it for the whole repo); it maps to `git log <branch> -- <path>`, so
+it also works for directories that no longer exist on the branch.
 
 | Case | Response |
 |---|---|

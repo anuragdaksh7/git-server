@@ -3,6 +3,7 @@ package repository
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	repositoryDto "gitark/dto/repository"
 	"gitark/logger"
@@ -54,15 +55,17 @@ func (h *Handler) List(c *gin.Context) {
 func (h *Handler) DirTree(c *gin.Context) {
 	currentUser := c.MustGet("user").(model.User)
 	repoName := c.Param("repoName")
+	// "" resolves to HEAD; otherwise a branch, tag or commit-ish.
+	ref := c.DefaultQuery("ref", "")
 	// "" or "/" lists the repo root; anything else descends one level.
 	path := c.DefaultQuery("path", "")
 
-	res, err := h.Service.DirTree(c, currentUser.ID, repoName, path)
+	res, err := h.Service.DirTree(c, currentUser.ID, repoName, ref, path)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrInvalidPath):
+		case errors.Is(err, ErrInvalidPath), errors.Is(err, ErrInvalidBranch):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		case errors.Is(err, ErrRepoNotFound), errors.Is(err, ErrPathNotFound):
+		case errors.Is(err, ErrRepoNotFound), errors.Is(err, ErrPathNotFound), errors.Is(err, ErrBranchNotFound):
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		default:
 			logger.Logger.Error("Failed to get directory tree: ", zap.Error(err))
@@ -74,10 +77,30 @@ func (h *Handler) DirTree(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": res})
 }
 
+func (h *Handler) Refs(c *gin.Context) {
+	currentUser := c.MustGet("user").(model.User)
+	repoName := c.Param("repoName")
+
+	res, err := h.Service.Refs(c, currentUser.ID, repoName)
+	if err != nil {
+		if errors.Is(err, ErrRepoNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		logger.Logger.Error("Failed to get refs: ", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": res})
+}
+
 func (h *Handler) CommitHistory(c *gin.Context) {
 	currentUser := c.MustGet("user").(model.User)
 	repoName := c.Param("repoName")
-	branch := c.Param("branch")
+	// Catch-all: git branch names may contain slashes (`feature/x`), and net/http
+	// decodes %2F before routing, so `:branch` could never match them.
+	branch := strings.Trim(c.Param("branch"), "/")
 	// optional: restrict history to commits touching this path
 	path := c.DefaultQuery("path", "")
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(defaultCommitLimit)))

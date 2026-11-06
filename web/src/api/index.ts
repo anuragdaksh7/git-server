@@ -17,6 +17,7 @@ import type {
   Release,
   Repo,
   RepoMeta,
+  RepoRefs,
   RepoSummary,
   SignUpReq,
   SignUpRes,
@@ -43,8 +44,11 @@ export const api = {
   me: () => get<Me>('/user/me'),
   createRepo: (req: CreateRepoReq) => post<Repo>('/repo/create', req),
   listRepos: () => get<Repo[]>('/repo/list'),
-  /** One level of the repo tree. `path` defaults to the repo root. */
-  tree: (repoName: string, path = '') => get<TreeEntry[]>(withQuery(`${repoPath(repoName)}/tree`, { path })),
+  /** Real default branch plus every branch and tag in the repo. */
+  refs: (repoName: string) => get<RepoRefs>(`${repoPath(repoName)}/refs`),
+  /** One level of the repo tree at `ref` (HEAD when omitted). `path` defaults to root. */
+  tree: (repoName: string, ref: string, path = '') =>
+    get<TreeEntry[]>(withQuery(`${repoPath(repoName)}/tree`, { ref, path })),
 
   profile: (me: Me, username = me.username) =>
     planned<Profile>(`GET /user/${username}/profile`, placeholder.profile(username, username === me.username ? me.name : username)),
@@ -63,11 +67,8 @@ export const api = {
   star: (repoName: string) => plannedWrite(`POST ${repoPath(repoName)}/star`),
   fork: (repoName: string) => plannedWrite(`POST ${repoPath(repoName)}/fork`),
 
-  commits: (repoName: string, owner: string, ref: string, path = '') =>
-    planned<Commit[]>(
-      withQuery(`GET ${repoPath(repoName)}/commits/${encodeURIComponent(ref)}`, { path }),
-      placeholder.commits(owner),
-    ),
+  commits: (repoName: string, ref: string, path = '') =>
+    get<Commit[]>(withQuery(`${repoPath(repoName)}/commits/${encodeURIComponent(ref)}`, { path })),
   readme: (repoName: string, ref: string, cloneUrl: string) =>
     planned<Blob | null>(withQuery(`GET ${repoPath(repoName)}/readme`, { ref }), placeholder.readme(repoName, cloneUrl)),
   blob: (repoName: string, ref: string, path: string) =>

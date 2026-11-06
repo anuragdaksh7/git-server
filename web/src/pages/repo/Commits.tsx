@@ -1,6 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
 import { api, type Commit } from '../../api'
-import { useMe } from '../../components/me'
 import { Avatar, Empty, Loadable } from '../../components/ui'
 import { formatDate, shortSha, timeAgo } from '../../lib/format'
 import { useAsync } from '../../lib/useAsync'
@@ -17,11 +16,10 @@ function groupByDay(commits: Commit[]) {
 }
 
 export default function Commits() {
-  const me = useMe()
   const { repoName, ref } = useRepo()
   const [params] = useSearchParams()
   const path = params.get('path') ?? ''
-  const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, me.username, ref, path))
+  const commits = useAsync(`commits:${repoName}:${ref}:${path}`, () => api.commits(repoName, ref, path))
 
   return (
     <main className="page repo-body">
